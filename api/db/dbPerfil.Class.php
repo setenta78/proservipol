@@ -1,69 +1,84 @@
 <?php
+/**
+ * dbPerfil.Class.php
+ * Acceso a TIPO_USUARIO (perfiles/roles del sistema)
+ * Compatible con PHP 5.1.2 + MySQL 5.0.77
+ */
 include_once("../../inc/config.inc.php");
 include_once("conexion.Class.php");
+
 class dbPerfil extends Conexion
 {
-    /**
-     * Lista todos los perfiles activos
-     */
     function listarPerfiles()
     {
         $conn = $this->conect();
-        $sql = "SELECT 
-                    id_perfil,
-                    nombre_perfil,
-                    descripcion,
-                    estado
-                FROM perfiles
-                WHERE estado = 1
-                ORDER BY nombre_perfil";
+        $sql = "SELECT
+                    TUS_CODIGO,
+                    TUS_DESCRIPCION,
+                    VALIDAR,
+                    VALIDAR_OIC,
+                    REGISTRAR,
+                    CONSULTAR_UNIDAD,
+                    CONSULTAR_PERFIL
+                FROM TIPO_USUARIO
+                WHERE TUS_ACTIVO = 1
+                ORDER BY TUS_CODIGO";
+
         $result = $this->execute($conn, $sql);
-        // Leer datos ANTES de cerrar conexión
         $perfiles = array();
+
         while ($myrow = mysql_fetch_array($result)) {
             $perfiles[] = array(
-                "idPerfil"      => $myrow["id_perfil"],
-                "nombrePerfil"  => utf8_encode($myrow["nombre_perfil"]),
-                "descripcion"   => utf8_encode($myrow["descripcion"]),
-                "estado"        => $myrow["estado"]
+                "tusCodigo"       => (int)$myrow["TUS_CODIGO"],
+                "tusDescripcion"  => utf8_encode($myrow["TUS_DESCRIPCION"]),
+                "validar"         => (int)$myrow["VALIDAR"],
+                "validarOic"      => (int)$myrow["VALIDAR_OIC"],
+                "registrar"       => (int)$myrow["REGISTRAR"],
+                "consultarUnidad" => (int)$myrow["CONSULTAR_UNIDAD"],
+                "consultarPerfil" => (int)$myrow["CONSULTAR_PERFIL"]
             );
         }
+
         $this->desconect();
-        return array(
-            "success" => true,
-            "data" => $perfiles,
-            "total" => count($perfiles)
-        );
+        return array("success" => true, "data" => $perfiles, "total" => count($perfiles));
     }
-    /**
-     * Busca un perfil por ID
-     */
-    function buscarPerfil($idPerfil)
+
+    function buscarPerfil($tusCodigo)
     {
         $conn = $this->conect();
-        $idPerfil = intval($idPerfil);
-        $sql = "SELECT 
-                    id_perfil,
-                    nombre_perfil,
-                    descripcion,
-                    estado
-                FROM perfiles
-                WHERE id_perfil = {$idPerfil}";
+        $tusCodigo = intval($tusCodigo);
+
+        $sql = "SELECT
+                    TUS_CODIGO,
+                    TUS_DESCRIPCION,
+                    VALIDAR,
+                    VALIDAR_OIC,
+                    REGISTRAR,
+                    CONSULTAR_UNIDAD,
+                    CONSULTAR_PERFIL
+                FROM TIPO_USUARIO
+                WHERE TUS_CODIGO = {$tusCodigo}
+                AND TUS_ACTIVO = 1";
+
         $result = $this->execute($conn, $sql);
-        // Leer datos ANTES de cerrar conexión
         $perfil = null;
+
         if ($myrow = mysql_fetch_array($result)) {
             $perfil = array(
-                "idPerfil"      => $myrow["id_perfil"],
-                "nombrePerfil"  => utf8_encode($myrow["nombre_perfil"]),
-                "descripcion"   => utf8_encode($myrow["descripcion"]),
-                "estado"        => $myrow["estado"]
+                "tusCodigo"       => (int)$myrow["TUS_CODIGO"],
+                "tusDescripcion"  => utf8_encode($myrow["TUS_DESCRIPCION"]),
+                "validar"         => (int)$myrow["VALIDAR"],
+                "validarOic"      => (int)$myrow["VALIDAR_OIC"],
+                "registrar"       => (int)$myrow["REGISTRAR"],
+                "consultarUnidad" => (int)$myrow["CONSULTAR_UNIDAD"],
+                "consultarPerfil" => (int)$myrow["CONSULTAR_PERFIL"]
             );
         }
+
         $this->desconect();
-        return $perfil ? 
-            array("success" => true, "data" => $perfil) : 
-            array("success" => false, "data" => false, "message" => "Perfil no encontrado");
+        return $perfil
+            ? array("success" => true, "data" => $perfil)
+            : array("success" => false, "data" => false, "message" => "Perfil no encontrado");
     }
 }
 ?>

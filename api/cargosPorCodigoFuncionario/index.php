@@ -1,44 +1,40 @@
 <?php
-session_start();
-// Validar sesión activa
-if (!isset($_SESSION['user_id'])) {
-    header('Content-Type: application/json; charset=UTF-8');
-    http_response_code(401);
-    echo json_encode(array(
-        "message" => "Sesión no válida. Por favor, inicie sesión nuevamente.",
-        "code" => 401
-    ));
-    exit;
-}
+/**
+ * cargosPorCodigoFuncionario/index.php
+ * Retorna los cargos históricos de un funcionario por su código.
+ * Compatible con PHP 5.1.2 + MySQL 5.0.77
+ */
+ob_start();
 include_once("../tools.php");
+session_start();
+include_once("../../inc/config.inc.php");
 include_once("../db/dbFuncionario.Class.php");
 include_once("request.php");
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Credentials: true');
-header('Access-Control-Max-Age: 86400');
-header("Access-Control-Allow-Headers: X-API-KEY, Origin, X-Requested-With, Content-Type, Accept, Access-Control-Request-Method");
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS, PUT, DELETE');
-header("Allow: GET, POST, OPTIONS, PUT, DELETE");
-header('Content-Type: application/json; charset=UTF-8');
-try {
-    $params = rules();
-    if ($params["code"] != "412") {
-        $objDBFuncionario = new dbFuncionario();
-        $resultado = $objDBFuncionario->cargosFuncionarioPorCodigo(
-            $params['codigoFuncionario'], 
-            $params['fechaDesde'], 
-            $params['fechaHasta']
-        );
-        echo _json_encode($resultado);
-    } else {
-        http_response_code(412);
-        echo _json_encode($params);
-    }
-} catch (Exception $e) {
-    http_response_code(500);
-    echo json_encode(array(
-        "message" => "Error interno del servidor: " . $e->getMessage(),
-        "code" => 500
-    ));
+ob_end_clean();
+
+header('Content-Type: application/json; charset=utf-8');
+
+if (!isset($_SESSION['FUN_CODIGO'])) {
+    http_response_code(401);
+    echo json_encode(array("success" => false, "message" => "Sesión no iniciada", "code" => 401));
+    exit;
 }
+
+$params = rules();
+if ($params["code"] == "412") {
+    http_response_code(412);
+    echo _json_encode($params);
+    exit;
+}
+
+$objDBFuncionario = new dbFuncionario();
+$resultado = $objDBFuncionario->cargosFuncionarioPorCodigo(
+    $params['codigoFuncionario'],
+    $params['fechaDesde'],
+    $params['fechaHasta']
+);
+
+http_response_code(200);
+echo _json_encode($resultado);
+exit;
 ?>

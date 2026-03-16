@@ -1,39 +1,77 @@
 <?php
-session_start();
-// Incluir tools.php PRIMERO (compatible con PHP 5.1.2)
+/**
+ * listarPerfiles/index.php
+ * Lista los tipos de usuario activos desde TIPO_USUARIO
+ * Compatible con PHP 5.1.2 + MySQL 5.0.77
+ */
+ob_start();
 include_once("../tools.php");
-// Deshabilitar salida de errores HTML
-error_reporting(0);
-ini_set('display_errors', 0);
-// Validar sesión activa
-if (!isset($_SESSION['user_id'])) {
-    header('Content-Type: application/json; charset=UTF-8');
+session_start();
+include_once("../../inc/config.inc.php");
+ob_end_clean();
+
+header('Content-Type: application/json; charset=utf-8');
+
+if (!isset($_SESSION['FUN_CODIGO'])) {
     http_response_code(401);
-    echo json_encode(array(
-        "success" => false,
-        "message" => "Sesión no válida. Por favor, inicie sesión nuevamente.",
-        "code" => 401
-    ));
+    echo json_encode(array("success" => false, "message" => "Sesión no iniciada", "code" => 401));
     exit;
 }
-include_once("../db/dbPerfil.Class.php");
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Credentials: true');
-header('Access-Control-Max-Age: 86400');
-header("Access-Control-Allow-Headers: X-API-KEY, Origin, X-Requested-With, Content-Type, Accept");
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE');
-header('Content-Type: application/json; charset=UTF-8');
-try {
-    $objDBPerfil = new dbPerfil();
-    $resultado = $objDBPerfil->listarPerfiles();
-    http_response_code(200);
-    echo json_encode($resultado);
-} catch (Exception $e) {
+
+$conn = mysql_connect(HOST, USER, PASS);
+if (!$conn) {
     http_response_code(500);
-    echo json_encode(array(
-        "success" => false,
-        "message" => "Error interno del servidor: " . $e->getMessage(),
-        "code" => 500
-    ));
+    echo json_encode(array("success" => false, "message" => "Error de conexión", "code" => 500));
+    exit;
 }
+if (!mysql_select_db(DB, $conn)) {
+    http_response_code(500);
+    echo json_encode(array("success" => false, "message" => "Error al seleccionar base de datos", "code" => 500));
+    exit;
+}
+mysql_query("SET NAMES 'utf8'", $conn);
+
+$sql = "SELECT
+            TUS_CODIGO,
+            TUS_DESCRIPCION,
+            VALIDAR,
+            VALIDAR_OIC,
+            REGISTRAR,
+            CONSULTAR_UNIDAD,
+            CONSULTAR_PERFIL
+        FROM TIPO_USUARIO
+        WHERE TUS_ACTIVO = 1
+        ORDER BY TUS_CODIGO";
+
+$result = mysql_query($sql, $conn);
+
+if (!$result) {
+    $error = mysql_error($conn);
+    mysql_close($conn);
+    http_response_code(500);
+    echo json_encode(array("success" => false, "message" => "Error en consulta: " . $error));
+    exit;
+}
+
+$perfiles = array();
+while ($row = mysql_fetch_array($result)) {
+    $perfiles[] = array(
+        "tusCodigo"       => (int)$row["TUS_CODIGO"],
+        "tusDescripcion"  => utf8_encode($row["TUS_DESCRIPCION"]),
+        "validar"         => (int)$row["VALIDAR"],
+        "validarOic"      => (int)$row["VALIDAR_OIC"],
+        "registrar"       => (int)$row["REGISTRAR"],
+        "consultarUnidad" => (int)$row["CONSULTAR_UNIDAD"],
+        "consultarPerfil" => (int)$row["CONSULTAR_PERFIL"]
+    );
+}
+
+mysql_close($conn);
+
+echo json_encode(array(
+    "success" => true,
+    "data"    => $perfiles,
+    "total"   => count($perfiles)
+));
+exit;
 ?>

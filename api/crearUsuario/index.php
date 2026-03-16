@@ -1,110 +1,167 @@
 <?php
-session_start();
+/**
+ * crearUsuario/index.php
+ * Registra un nuevo usuario en PROSERVIPOL.
+ * El funcionario debe existir en FUNCIONARIO (sincronizado desde personal).
+ * Compatible con PHP 5.1.2 + MySQL 5.0.77
+ */
 
-// ============================================
-// COMPATIBILIDAD PHP 5.1.2: json_encode/decode
-// ============================================
-if (!function_exists('json_decode')) {
-    require_once('../../inc/Services_JSON.php'); // ← RUTA CORRECTA
-    function json_decode($content, $assoc = false) {
-        if ($assoc) {
-            $json = new Services_JSON(SERVICES_JSON_LOOSE_TYPE);
-        } else {
-            $json = new Services_JSON();
-        }
-        return $json->decode($content);
-    }
-}
+ob_start();
 
 if (!function_exists('json_encode')) {
-    require_once('../../inc/Services_JSON.php'); // ← RUTA CORRECTA
-    function json_encode($content) {
+    require_once('../../lib/Services_JSON.php');
+    function json_encode($data) {
         $json = new Services_JSON();
-        return $json->encode($content);
+        return $json->encode($data);
     }
 }
 
-include_once("../tools.php");
-error_reporting(0);
-ini_set('display_errors', 0);
+session_start();
+include_once("../../inc/config.inc.php");
 
-// Validar sesión activa
-if (!isset($_SESSION['USUARIO_CODIGOFUNCIONARIO'])) {
-    header('Content-Type: application/json; charset=UTF-8');
-    http_response_code(401);
-    echo json_encode(array(
-        "success" => false,
-        "message" => "Sesión no válida. Por favor, inicie sesión nuevamente.",
-        "code" => 401
-    ));
-    exit;
-}
+ob_end_clean();
+header('Content-Type: application/json; charset=utf-8');
 
-// Incluir configuración y consultas específicas de PROSERVIPOL
-require_once "../../queries/config.php"; // ← RUTA CORRECTA
-global $link;
-require_once "../../queries/usuario_queries.php"; // ← RUTA CORRECTA
-
-header('Content-Type: application/json; charset=UTF-8');
-
-// Solo permitir método POST
+// Solo POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(array(
-        "success" => false,
-        "message" => "Método no permitido. Use POST.",
-        "code" => 405
-    ));
+    echo json_encode(array("success" => false, "message" => "Método no permitido"));
     exit;
 }
 
-try {
-    $json = file_get_contents('php://input');
-    $data = json_decode($json, true);
-    
-    // Validar campos obligatorios (compatible con PHP 5.1.2)
-    $codFuncionario = isset($data['codFuncionario']) ? trim($data['codFuncionario']) : '';
-    $codigoUnidad = isset($data['codigoUnidad']) ? trim($data['codigoUnidad']) : '';
-    $tipoUsuario = isset($data['tipoUsuario']) ? trim($data['tipoUsuario']) : '';
-    $password = isset($data['password']) ? trim($data['password']) : '';
-
-    if (!$data || 
-        empty($codFuncionario) ||
-        empty($codigoUnidad) ||
-        empty($tipoUsuario) ||
-        empty($password)
-    ) {
-        http_response_code(400);
-        echo json_encode(array(
-            "success" => false,
-            "message" => "Faltan datos obligatorios: codFuncionario, codigoUnidad, tipoUsuario, password.",
-            "code" => 400
-        ));
-        exit;
-    }
-
-    $resultado = crearUsuarioProservipol(
-        $codFuncionario,
-        $codigoUnidad,
-        $tipoUsuario,
-        $password,
-        $_SESSION['USUARIO_CODIGOFUNCIONARIO']
-    );
-
-    if ($resultado['success']) {
-        http_response_code(201);
-    } else {
-        http_response_code(400);
-    }
-    
-    echo json_encode($resultado);
-    
-} catch (Exception $e) {
-    http_response_code(500);
-    echo json_encode(array(
-        "success" => false,
-        "message" => "Error interno del servidor: " . $e->getMessage(),
-        "code" => 500
-    ));
+// Verificar sesión
+if (!isset($_SESSION['FUN_CODIGO'])) {
+    echo json_encode(array("success" => false, "message" => "Sesión no iniciada"));
+    exit;
 }
+
+// Verificar permiso REGISTRAR
+if (!isset($_SESSION['REGISTRAR']) || $_SESSION['REGISTRAR'] != 1) {
+    echo json_encode(array("success" => false, "message" => "No tiene permisos para registrar usuarios"));
+    exit;
+}
+
+// Leer y validar parámetros
+$funCodigo  = isset($_POST['fun_codigo'])  ? strtoupper(trim($_POST['fun_codigo']))  : '';
+$uniCodigo  = isset($_POST['uni_codigo'])  ? intval($_POST['uni_codigo'])  : 0;
+$usLogin    = isset($_POST['us_login'])    ? trim($_POST['us_login'])    : '';
+$usPassword = isset($_POST['us_password']) ? trim($_POST['us_password']) : '';
+$tusCodigo  = isset($_POST['tus_codigo'])  ? intval($_POST['tus_codigo'])  : 0;
+$usActivo   = isset($_POST['us_activo'])   ? intval($_POST['us_activo'])   : 1;
+
+if (empty($funCodigo)) {
+    echo json_encode(array("success" => false, "message" => "Código de funcionario requerido"));
+    exit;
+}
+if (empty($usLogin)) {
+    echo json_encode(array("success" => false, "message" => "Login requerido"));
+    exit;
+}
+if (empty($usPassword)) {
+    echo json_encode(array("success" => false, "message" => "Password requerida"));
+    exit;
+}
+if ($uniCodigo <= 0) {
+    echo json_encode(array("success" => false, "message" => "Unidad requerida"));
+    exit;
+}
+if ($tusCodigo <= 0) {
+    echo json_encode(array("success" => false, "message" => "Tipo de usuario requerido"));
+    exit;
+}
+
+// Conexión
+$conn = mysql_connect(HOST, USER, PASS);
+if (!$conn) {
+    echo json_encode(array("success" => false, "message" => "Error de conexión"));
+    exit;
+}
+if (!mysql_select_db(DB, $conn)) {
+    echo json_encode(array("success" => false, "message" => "Error al seleccionar base de datos"));
+    exit;
+}
+mysql_query("SET NAMES 'utf8'", $conn);
+
+$funCodigoEsc = mysql_real_escape_string($funCodigo, $conn);
+$usLoginEsc   = mysql_real_escape_string($usLogin, $conn);
+$usPasswordEsc = mysql_real_escape_string($usPassword, $conn);
+
+// Verificar que el funcionario existe en FUNCIONARIO
+$sqlFun = "SELECT FUN_CODIGO FROM FUNCIONARIO WHERE FUN_CODIGO = '{$funCodigoEsc}'";
+$resFun = mysql_query($sqlFun, $conn);
+if (!$resFun || mysql_num_rows($resFun) == 0) {
+    mysql_close($conn);
+    echo json_encode(array("success" => false, "message" => "Funcionario no encontrado en el sistema"));
+    exit;
+}
+
+// Verificar que no existe ya como usuario
+$sqlCheck = "SELECT FUN_CODIGO FROM USUARIO WHERE FUN_CODIGO = '{$funCodigoEsc}'";
+$resCheck = mysql_query($sqlCheck, $conn);
+if ($resCheck && mysql_num_rows($resCheck) > 0) {
+    mysql_close($conn);
+    echo json_encode(array("success" => false, "message" => "El funcionario ya tiene un usuario registrado"));
+    exit;
+}
+
+// Verificar que US_LOGIN no está en uso
+$sqlLogin = "SELECT FUN_CODIGO FROM USUARIO WHERE US_LOGIN = '{$usLoginEsc}'";
+$resLogin = mysql_query($sqlLogin, $conn);
+if ($resLogin && mysql_num_rows($resLogin) > 0) {
+    mysql_close($conn);
+    echo json_encode(array("success" => false, "message" => "El login ya está en uso por otro usuario"));
+    exit;
+}
+
+// Verificar que UNI_CODIGO existe
+$sqlUni = "SELECT UNI_CODIGO FROM UNIDAD WHERE UNI_CODIGO = {$uniCodigo}";
+$resUni = mysql_query($sqlUni, $conn);
+if (!$resUni || mysql_num_rows($resUni) == 0) {
+    mysql_close($conn);
+    echo json_encode(array("success" => false, "message" => "La unidad especificada no existe"));
+    exit;
+}
+
+// Verificar que TUS_CODIGO existe y está activo
+$sqlTus = "SELECT TUS_CODIGO FROM TIPO_USUARIO WHERE TUS_CODIGO = {$tusCodigo} AND TUS_ACTIVO = 1";
+$resTus = mysql_query($sqlTus, $conn);
+if (!$resTus || mysql_num_rows($resTus) == 0) {
+    mysql_close($conn);
+    echo json_encode(array("success" => false, "message" => "El tipo de usuario especificado no es válido"));
+    exit;
+}
+
+// Insertar nuevo usuario
+$sql = "INSERT INTO USUARIO (
+            FUN_CODIGO,
+            UNI_CODIGO,
+            US_LOGIN,
+            US_PASSWORD,
+            TUS_CODIGO,
+            US_FECHACREACION,
+            US_ACTIVO
+        ) VALUES (
+            '{$funCodigoEsc}',
+            {$uniCodigo},
+            '{$usLoginEsc}',
+            '{$usPasswordEsc}',
+            {$tusCodigo},
+            NOW(),
+            {$usActivo}
+        )";
+
+$result = mysql_query($sql, $conn);
+
+if ($result) {
+    mysql_close($conn);
+    echo json_encode(array(
+        "success"   => true,
+        "message"   => "Usuario creado exitosamente",
+        "funCodigo" => $funCodigo
+    ));
+} else {
+    $error = mysql_error($conn);
+    mysql_close($conn);
+    echo json_encode(array("success" => false, "message" => "Error al crear usuario: " . $error));
+}
+exit;
 ?>

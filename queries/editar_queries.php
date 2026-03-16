@@ -1,170 +1,147 @@
 <?php
+/**
+ * editar_queries.php
+ * Funciones para editar y consultar usuarios en el frontend.
+ * Compatible con PHP 5.1.2 + MySQL 5.0.77
+ */
 require_once "config.php";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['codigo'])) {
-    $codigo = $_POST['codigo'];
-    $perfil = $_POST['perfil'];
-    $unidad = $_POST['unidad'];
-    $password = $_POST['password'];
+    $codigo   = isset($_POST['codigo'])   ? $_POST['codigo']   : '';
+    $perfil   = isset($_POST['perfil'])   ? $_POST['perfil']   : '';
+    $unidad   = isset($_POST['unidad'])   ? $_POST['unidad']   : '';
+    $password = isset($_POST['password']) ? $_POST['password'] : '';
     echo actualizarUsuario($codigo, $perfil, $unidad, $password);
 }
 
-// Función para obtener datos del funcionario
 function obtenerFuncionario($codigo)
 {
     global $link;
     $codigo = mysql_real_escape_string($codigo, $link);
-    
-    $sql = "SELECT 
-        FUNCIONARIO.FUN_CODIGO,
-        FUNCIONARIO.FUN_RUT,
-        FUNCIONARIO.FUN_NOMBRE,
-        IFNULL(FUNCIONARIO.FUN_NOMBRE2, '') AS FUN_NOMBRE2,
-        FUNCIONARIO.FUN_APELLIDOPATERNO,
-        FUNCIONARIO.FUN_APELLIDOMATERNO,
-        GRADO.GRA_DESCRIPCION,
-        IFNULL(
-            IF(CARGO_FUNCIONARIO.UNI_AGREGADO, 
-               CONCAT(CARGO.CAR_DESCRIPCION, ' A ', UNIDAD.UNI_DESCRIPCION), 
-               CARGO.CAR_DESCRIPCION),
-            'SIN CARGO'
-        ) AS CARGO,
-        IFNULL(VISTA_ARBOL_UNIDADES_NACIONAL_CON_PREFECTURAS.ZONA_DESCRIPCION, '') AS ZONA_DESCRIPCION,
-        IFNULL(VISTA_ARBOL_UNIDADES_NACIONAL_CON_PREFECTURAS.PREFECTURA_DESCRIPCION, '') AS PREFECTURA_DESCRIPCION,
-        IFNULL(VISTA_ARBOL_UNIDADES_NACIONAL_CON_PREFECTURAS.COMISARIA_DESCRIPCION, '') AS COMISARIA_DESCRIPCION,
-        IFNULL(VISTA_ARBOL_UNIDADES_NACIONAL_CON_PREFECTURAS.UNI_DESCRIPCION, 'MESA DE AYUDA') AS UNI_DESCRIPCION,
-        IFNULL(TIPO_USUARIO.TUS_DESCRIPCION, '') AS TUS_DESCRIPCION,
-        IFNULL(CAPACITACION.TIPO_CAPACITACION, 'SIN CURSO') AS CAPACITACION,
-        CAPACITACION.NOTA_PROSERVIPOL,
-        CAPACITACION.FECHA_CAPACITACION,
-        IFNULL(USUARIO.US_LOGIN, '') AS US_LOGIN,
-        IFNULL(USUARIO.US_PASSWORD, '') AS US_PASSWORD,
-        IFNULL(USUARIO.UNI_CODIGO, 0) AS UNI_CODIGO,
-        IFNULL(USUARIO.TUS_CODIGO, 0) AS TUS_CODIGO,
-        CASE WHEN USUARIO.FUN_CODIGO IS NULL THEN 0 ELSE 1 END AS TIENE_USUARIO
-        FROM FUNCIONARIO
-        JOIN GRADO ON FUNCIONARIO.ESC_CODIGO = GRADO.ESC_CODIGO 
-            AND FUNCIONARIO.GRA_CODIGO = GRADO.GRA_CODIGO
-        LEFT JOIN CARGO_FUNCIONARIO ON CARGO_FUNCIONARIO.FUN_CODIGO = FUNCIONARIO.FUN_CODIGO
-            AND CARGO_FUNCIONARIO.FECHA_HASTA IS NULL
-        LEFT JOIN CARGO ON CARGO.CAR_CODIGO = CARGO_FUNCIONARIO.CAR_CODIGO
-        LEFT JOIN UNIDAD ON UNIDAD.UNI_CODIGO = CARGO_FUNCIONARIO.UNI_AGREGADO
-        LEFT JOIN USUARIO ON USUARIO.FUN_CODIGO = FUNCIONARIO.FUN_CODIGO
-        LEFT JOIN TIPO_USUARIO ON TIPO_USUARIO.TUS_CODIGO = USUARIO.TUS_CODIGO
-        LEFT JOIN CAPACITACION ON CAPACITACION.FUN_CODIGO = FUNCIONARIO.FUN_CODIGO 
-            AND CAPACITACION.ACTIVO = 1
-        LEFT JOIN VISTA_ARBOL_UNIDADES_NACIONAL_CON_PREFECTURAS 
-            ON USUARIO.UNI_CODIGO = VISTA_ARBOL_UNIDADES_NACIONAL_CON_PREFECTURAS.UNI_CODIGO
-        WHERE FUNCIONARIO.FUN_CODIGO = '$codigo'";
-    
+
+    $sql = "SELECT
+                f.FUN_CODIGO,
+                f.FUN_RUT,
+                f.FUN_NOMBRE,
+                IFNULL(f.FUN_NOMBRE2, '') AS FUN_NOMBRE2,
+                f.FUN_APELLIDOPATERNO,
+                f.FUN_APELLIDOMATERNO,
+                g.GRA_DESCRIPCION,
+                un.UNI_DESCRIPCION,
+                t.TUS_DESCRIPCION,
+                IFNULL(c.TIPO_CAPACITACION, 'SIN CURSO') AS CAPACITACION,
+                c.NOTA_PROSERVIPOL,
+                c.FECHA_CAPACITACION,
+                u.US_LOGIN,
+                u.US_PASSWORD,
+                u.UNI_CODIGO,
+                u.TUS_CODIGO,
+                u.US_ACTIVO
+            FROM USUARIO u
+            INNER JOIN FUNCIONARIO f ON u.FUN_CODIGO = f.FUN_CODIGO
+            LEFT JOIN GRADO g ON f.ESC_CODIGO = g.ESC_CODIGO AND f.GRA_CODIGO = g.GRA_CODIGO
+            LEFT JOIN UNIDAD un ON u.UNI_CODIGO = un.UNI_CODIGO
+            LEFT JOIN TIPO_USUARIO t ON u.TUS_CODIGO = t.TUS_CODIGO
+            LEFT JOIN CAPACITACION c ON c.FUN_CODIGO = f.FUN_CODIGO AND c.ACTIVO = 1
+            WHERE u.FUN_CODIGO LIKE '%{$codigo}%'
+            LIMIT 1";
+
     $res = mysql_query($sql, $link);
     return $res ? mysql_fetch_assoc($res) : null;
 }
 
-// Función para obtener últimos accesos
 function obtenerUltimosAccesos($codigo)
 {
     global $link;
     $codigo = mysql_real_escape_string($codigo, $link);
-    
-    $sql = "SELECT 
-            BITACORA_USUARIO.US_FECHAHORA_INICIO,
-            GRADO.GRA_DESCRIPCION,
-            CONCAT_WS(' ', FUNCIONARIO.FUN_APELLIDOPATERNO, FUNCIONARIO.FUN_APELLIDOMATERNO, FUNCIONARIO.FUN_NOMBRE, FUNCIONARIO.FUN_NOMBRE2) AS NOMBRE_COMPLETO,
-            FUNCIONARIO.FUN_CODIGO,
-            UNIDAD.UNI_DESCRIPCION,
-            TIPO_USUARIO.TUS_DESCRIPCION,
-            BITACORA_USUARIO.US_DIRECCION_IP
-            FROM
-            BITACORA_USUARIO
-            INNER JOIN UNIDAD ON (BITACORA_USUARIO.UNI_CODIGO = UNIDAD.UNI_CODIGO)
-            INNER JOIN USUARIO ON (USUARIO.UNI_CODIGO = UNIDAD.UNI_CODIGO)
-            AND (BITACORA_USUARIO.FUN_CODIGO = USUARIO.FUN_CODIGO)
-            INNER JOIN TIPO_USUARIO ON (USUARIO.TUS_CODIGO = TIPO_USUARIO.TUS_CODIGO)
-            INNER JOIN FUNCIONARIO ON (FUNCIONARIO.FUN_CODIGO = USUARIO.FUN_CODIGO)
-            INNER JOIN GRADO ON (FUNCIONARIO.ESC_CODIGO = GRADO.ESC_CODIGO)
-            AND (FUNCIONARIO.GRA_CODIGO = GRADO.GRA_CODIGO)
-            WHERE
-            BITACORA_USUARIO.FUN_CODIGO = '$codigo'
-            ORDER BY
-            BITACORA_USUARIO.US_FECHAHORA_INICIO DESC
-            LIMIT 10";
 
+    // BITACORA_USUARIO no existe aún — retornar array vacío
+    // Cuando se implemente la tabla de bitácora, descomentar la query real
+    /*
+    $sql = "SELECT
+                b.US_FECHAHORA_INICIO,
+                b.US_DIRECCION_IP,
+                f.FUN_CODIGO,
+                CONCAT_WS(' ', f.FUN_APELLIDOPATERNO, f.FUN_APELLIDOMATERNO, f.FUN_NOMBRE, f.FUN_NOMBRE2) AS NOMBRE_COMPLETO,
+                g.GRA_DESCRIPCION,
+                un.UNI_DESCRIPCION,
+                t.TUS_DESCRIPCION
+            FROM BITACORA_USUARIO b
+            INNER JOIN USUARIO u ON b.FUN_CODIGO = u.FUN_CODIGO
+            INNER JOIN FUNCIONARIO f ON f.FUN_CODIGO = u.FUN_CODIGO
+            LEFT JOIN GRADO g ON f.ESC_CODIGO = g.ESC_CODIGO AND f.GRA_CODIGO = g.GRA_CODIGO
+            LEFT JOIN UNIDAD un ON b.UNI_CODIGO = un.UNI_CODIGO
+            LEFT JOIN TIPO_USUARIO t ON u.TUS_CODIGO = t.TUS_CODIGO
+            WHERE b.FUN_CODIGO = '{$codigo}'
+            ORDER BY b.US_FECHAHORA_INICIO DESC
+            LIMIT 10";
     $result = mysql_query($sql, $link);
     $accesos = array();
     while ($row = mysql_fetch_assoc($result)) {
         $accesos[] = $row;
     }
     return $accesos;
+    */
+
+    return array(); // Sin bitácora por ahora
 }
 
 function actualizarUsuario($codigo, $perfil, $unidad, $password)
 {
     global $link;
+
     if ($codigo === '' || $perfil === '' || $unidad === '') {
-        return "Faltan datos";
+        return json_encode(array("success" => false, "message" => "Faltan datos obligatorios"));
     }
-    // Escapar datos
-    $codigo = mysql_real_escape_string($codigo, $link);
-    $perfil = mysql_real_escape_string($perfil, $link);
-    $unidad = mysql_real_escape_string($unidad, $link);
+
+    $codigo   = mysql_real_escape_string($codigo,   $link);
+    $perfil   = mysql_real_escape_string($perfil,   $link);
+    $unidad   = mysql_real_escape_string($unidad,   $link);
     $password = mysql_real_escape_string($password, $link);
-    
-    // Verificar si el usuario existe en la tabla USUARIO
-    $check_sql = "SELECT FUN_CODIGO FROM USUARIO WHERE FUN_CODIGO = '$codigo'";
-    $check_res = mysql_query($check_sql, $link);
-    
-    if (mysql_num_rows($check_res) > 0) {
-        // El usuario existe, hacer UPDATE
-        $sql = "UPDATE USUARIO
-                SET TUS_CODIGO = '$perfil',
-                    UNI_CODIGO = '$unidad'";
-        
-        // Si el password viene vacío, no se actualiza
-        if ($password !== '') {
-            $sql .= ", US_PASSWORD = MD5('$password')";
-        }
-        
-        $sql .= " WHERE FUN_CODIGO = '$codigo'";
-        $res = mysql_query($sql, $link);
-        
-        if (!$res) {
-            return "Error al actualizar: " . mysql_error($link);
-        }
-        if (mysql_affected_rows($link) > 0) {
-            return "Datos actualizados correctamente";
-        } else {
-            return "No se realizaron cambios";
-        }
-    } else {
-        // El usuario NO existe, hacer INSERT
-        // Obtener el RUT del funcionario
-        $rut_sql = "SELECT FUN_RUT FROM FUNCIONARIO WHERE FUN_CODIGO = '$codigo'";
-        $rut_res = mysql_query($rut_sql, $link);
-        
-        if (!$rut_res || mysql_num_rows($rut_res) == 0) {
-            return "Error: Funcionario no encontrado";
-        }
-        
-        $rut_row = mysql_fetch_assoc($rut_res);
-        $rut = $rut_row['FUN_RUT'];
-        
-        // Crear el login (usar el código del funcionario)
-        $login = $codigo;
-        
-        // Si no se proporciona password, usar el RUT como password por defecto
-        $pass_value = ($password !== '') ? "MD5('$password')" : "MD5('$rut')";
-        
-        $insert_sql = "INSERT INTO USUARIO (FUN_CODIGO, US_LOGIN, US_PASSWORD, TUS_CODIGO, UNI_CODIGO)
-                       VALUES ('$codigo', '$login', $pass_value, '$perfil', '$unidad')";
-        
-        $res = mysql_query($insert_sql, $link);
-        
-        if (!$res) {
-            return "Error al crear usuario: " . mysql_error($link);
-        }
-        
-        return "Usuario creado correctamente";
+
+    // Verificar que el usuario existe
+    $sqlCheck = "SELECT FUN_CODIGO FROM USUARIO WHERE FUN_CODIGO = '{$codigo}'";
+    $resCheck = mysql_query($sqlCheck, $link);
+    if (!$resCheck || mysql_num_rows($resCheck) == 0) {
+        return json_encode(array("success" => false, "message" => "Usuario no encontrado"));
     }
+
+    // Verificar que TUS_CODIGO es válido
+    $sqlTus = "SELECT TUS_CODIGO FROM TIPO_USUARIO WHERE TUS_CODIGO = '{$perfil}' AND TUS_ACTIVO = 1";
+    $resTus = mysql_query($sqlTus, $link);
+    if (!$resTus || mysql_num_rows($resTus) == 0) {
+        return json_encode(array("success" => false, "message" => "Tipo de usuario no válido"));
+    }
+
+    // Verificar que UNI_CODIGO existe
+    $sqlUni = "SELECT UNI_CODIGO FROM UNIDAD WHERE UNI_CODIGO = '{$unidad}'";
+    $resUni = mysql_query($sqlUni, $link);
+    if (!$resUni || mysql_num_rows($resUni) == 0) {
+        return json_encode(array("success" => false, "message" => "Unidad no válida"));
+    }
+
+    $sql = "UPDATE USUARIO SET
+                TUS_CODIGO = '{$perfil}',
+                UNI_CODIGO = '{$unidad}',
+                US_FECHAMODIFICACION = NOW()";
+
+    if ($password !== '') {
+        $sql .= ", US_PASSWORD = MD5('{$password}')";
+    }
+
+    $sql .= " WHERE FUN_CODIGO = '{$codigo}'";
+
+    $res = mysql_query($sql, $link);
+
+    if (!$res) {
+        return json_encode(array("success" => false, "message" => "Error al actualizar: " . mysql_error($link)));
+    }
+
+    return json_encode(array(
+        "success" => true,
+        "message" => mysql_affected_rows($link) > 0
+            ? "Datos actualizados correctamente"
+            : "No se realizaron cambios"
+    ));
 }
 ?>

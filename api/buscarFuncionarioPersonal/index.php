@@ -1,337 +1,207 @@
 <?php
 /**
- * API: Buscar Funcionario en Personal
- * Busca primero en BD PROSERVIPOL, luego en BD Personal
- * Compatible con PHP 5.1.2 (usando mysql_* functions)
+ * buscarFuncionarioPersonal/index.php
+ * Busca un funcionario en la BD de Personal (PERSONAL_MOCK en dev, personal_view en prod)
+ * y verifica si ya está registrado como usuario en PROSERVIPOL.
+ * Compatible con PHP 5.1.2 + MySQL 5.0.77
  */
 
-// Iniciar sesión
-session_start();
+// Evitar cualquier salida antes de headers
+ob_start();
 
-// Incluir librería JSON para PHP 5.1.2
-require_once "../../inc/Services_JSON.php";
-$json = new Services_JSON();
-
-// Función de respaldo para json_encode (PHP 5.1.2 no lo tiene)
+// Compatibilidad JSON para PHP < 5.2
 if (!function_exists('json_encode')) {
+    require_once('../../lib/Services_JSON.php');
     function json_encode($data) {
-        global $json;
+        $json = new Services_JSON();
         return $json->encode($data);
     }
 }
-if (!function_exists('json_decode')) {
-    function json_decode($json_str, $assoc = false) {
-        global $json;
-        return $json->decode($json_str, $assoc);
-    }
-}
 
-// Incluir middleware de autenticación
-require_once(dirname(__FILE__) . '/../../middleware_auth.php');
+session_start();
+include_once("../../inc/config.inc.php");
+include_once("../../inc/configPersonal.inc.php");
 
-// Incluir archivos de configuración
-require_once(dirname(__FILE__) . '/../../inc/config.inc.php');
-
-// Configurar cabeceras JSON
+ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
 
-// Validar método HTTP
-if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-    header('HTTP/1.1 405 Method Not Allowed');
-    echo json_encode(array(
-        'success' => false,
-        'yaRegistrado' => false,
-        'message' => 'Método no permitido'
-    ));
+// Verificar sesión
+if (!isset($_SESSION['FUN_CODIGO'])) {
+    echo json_encode(array("success" => false, "message" => "Sesión no iniciada"));
     exit;
 }
 
-// Obtener código de funcionario
-$codFuncionario = isset($_GET['codFuncionario']) ? trim($_GET['codFuncionario']) : '';
-
-// CASO 1: Validar que exista código de funcionario
-if (empty($codFuncionario)) {
-    header('HTTP/1.1 400 Bad Request');
-    echo json_encode(array(
-        'success' => false,
-        'yaRegistrado' => false,
-        'message' => 'SE DEBE INGRESAR EL CODIGO DE FUNCIONARIO PARA PODER REALIZAR LA BUSQUEDA'
-    ));
+// Validar parámetro
+$funCodigo = isset($_GET['fun_codigo']) ? strtoupper(trim($_GET['fun_codigo'])) : '';
+if (empty($funCodigo)) {
+    echo json_encode(array("success" => false, "message" => "Código de funcionario requerido"));
     exit;
 }
 
-try {
-    // ========================================
-    // PASO 1: Buscar en BD PROSERVIPOL
-    // ========================================
-    $connProservipol = mysql_connect(HOST, DB_USER, DB_PASS);
-    
-    if (!$connProservipol) {
-        throw new Exception('Error de conexión con la base de datos PROSERVIPOL: ' . mysql_error());
-    }
-    
-    if (!mysql_select_db(DB, $connProservipol)) {
-        throw new Exception('Error al seleccionar BD PROSERVIPOL: ' . mysql_error());
-    }
-    
-    mysql_query("SET NAMES 'utf8'", $connProservipol);
-    
-    // Buscar usuario en PROSERVIPOL (escapar para evitar SQL injection)
-    $codFuncionarioEscaped = mysql_real_escape_string($codFuncionario, $connProservipol);
-    
-    // CORRECCIÓN CLAVE: Hacer JOIN con FUNCIONARIO para obtener nombre, apellidos y RUT
-    $sqlProservipol = "SELECT 
-        u.US_LOGIN,
-        u.US_ACTIVO,
-        f.FUN_NOMBRE,
-        f.FUN_NOMBRE2,
-        f.FUN_APELLIDOPATERNO,
-        f.FUN_APELLIDOMATERNO,
-        f.FUN_RUT,
-        g.GRA_DESCRIPCION,
-        un.UNI_DESCRIPCION,
-        un.UNI_CODIGO,
-        tus.TUS_DESCRIPCION,
-        tus.TUS_CODIGO
-    FROM USUARIO u
-    LEFT JOIN FUNCIONARIO f ON u.FUN_CODIGO = f.FUN_CODIGO
-    LEFT JOIN GRADO g ON f.GRA_CODIGO = g.GRA_CODIGO AND f.ESC_CODIGO = g.ESC_CODIGO
-    LEFT JOIN UNIDAD un ON u.UNI_CODIGO = un.UNI_CODIGO
-    LEFT JOIN TIPO_USUARIO tus ON u.TUS_CODIGO = tus.TUS_CODIGO
-    WHERE u.US_LOGIN = '$codFuncionarioEscaped'
-    LIMIT 1";
-    
-    $resultProservipol = mysql_query($sqlProservipol, $connProservipol);
-    
-    if (!$resultProservipol) {
-        throw new Exception('Error en consulta PROSERVIPOL: ' . mysql_error($connProservipol));
-    }
-    
-    if (mysql_num_rows($resultProservipol) > 0) {
-        // Usuario encontrado en PROSERVIPOL
-        $usuario = mysql_fetch_assoc($resultProservipol);
-        
-        // CASO 2: Usuario está ACTIVO
-        if ($usuario['US_ACTIVO'] == '1') {
-            mysql_close($connProservipol);
-            
-            header('HTTP/1.1 200 OK');
-            echo json_encode(array(
-                'success' => false,
-                'yaRegistrado' => true,
-                'usuarioInactivo' => false,
-                'message' => 'EL FUNCIONARIO YA ESTÁ REGISTRADO COMO USUARIO DEL SISTEMA PROSERVIPOL',
-                'data' => array(
-                    'codigo' => $usuario['US_LOGIN'],
-                    'rut' => $usuario['FUN_RUT'],
-                    'nombre' => trim($usuario['FUN_NOMBRE'] . ' ' . $usuario['FUN_NOMBRE2']),
-                    'apellidoPaterno' => $usuario['FUN_APELLIDOPATERNO'],
-                    'apellidoMaterno' => $usuario['FUN_APELLIDOMATERNO'],
-                    'grado' => $usuario['GRA_DESCRIPCION'],
-                    'unidad' => $usuario['UNI_DESCRIPCION'],
-                    'perfil' => $usuario['TUS_DESCRIPCION']
-                )
-            ));
-            exit;
-        }
-        
-        // CASO 3: Usuario existe pero está INACTIVO
-        if ($usuario['US_ACTIVO'] == '0') {
-            mysql_close($connProservipol);
-            
-            header('HTTP/1.1 200 OK');
-            echo json_encode(array(
-                'success' => false,
-                'yaRegistrado' => false,
-                'usuarioInactivo' => true,
-                'message' => 'EL FUNCIONARIO YA EXISTE PERO ESTÁ INACTIVO. ¿DESEA REACTIVARLO?',
-                'data' => array(
-                    'codigo' => $usuario['US_LOGIN'],
-                    'rut' => $usuario['FUN_RUT'],
-                    'nombre' => trim($usuario['FUN_NOMBRE'] . ' ' . $usuario['FUN_NOMBRE2']),
-                    'apellidoPaterno' => $usuario['FUN_APELLIDOPATERNO'],
-                    'apellidoMaterno' => $usuario['FUN_APELLIDOMATERNO'],
-                    'grado' => $usuario['GRA_DESCRIPCION'],
-                    'unidad' => $usuario['UNI_DESCRIPCION'],
-                    'perfil' => $usuario['TUS_DESCRIPCION']
-                )
-            ));
-            exit;
-        }
-    }
-    
-    // ========================================
-    // PASO 2: Buscar en BD PERSONAL
-    // ========================================
-    // Determinar si estamos en desarrollo (usa PERSONAL_MOCK) o producción (usa personal_view)
-    $checkMock = mysql_query("SHOW TABLES LIKE 'PERSONAL_MOCK'", $connProservipol);
-    $useMock = (mysql_num_rows($checkMock) > 0);
+// ─── Conexión a proservipol_test (siempre necesaria) ───────────────────────
+$connPros = mysql_connect(HOST, USER, PASS);
+if (!$connPros) {
+    echo json_encode(array("success" => false, "message" => "Error al conectar con base de datos principal"));
+    exit;
+}
+if (!mysql_select_db(DB, $connPros)) {
+    echo json_encode(array("success" => false, "message" => "Error al seleccionar base de datos principal"));
+    exit;
+}
+mysql_query("SET NAMES 'utf8'", $connPros);
 
-    if ($useMock) {
-        // === DESARROLLO: Usar la misma conexión a proservipol_test y la tabla PERSONAL_MOCK ===
-        $sqlPersonal = "SELECT 
-            PEFBCOD,
-            PEFBRUT,
-            PEFBNOM1,
-            PEFBNOM2,
-            PEFBAPEP,
-            PEFBAPEM,
-            PEFBGRA,
-            GRADO_DESCRIPCION,
-            REPARTICION_DESC,
-            REPARTICION_DEP
-        FROM PERSONAL_MOCK
-        WHERE PEFBCOD = '$codFuncionarioEscaped'
-        LIMIT 1";
+// ─── Determinar si usamos PERSONAL_MOCK o base de datos de personal real ───
+$useMock = false;
+$checkMock = mysql_query("SHOW TABLES LIKE 'PERSONAL_MOCK'", $connPros);
+if ($checkMock && mysql_num_rows($checkMock) > 0) {
+    $useMock = true;
+}
 
-        $resultPersonal = mysql_query($sqlPersonal, $connProservipol);
+// ─── Buscar en Personal ────────────────────────────────────────────────────
+$datosFuncionario = null;
 
-        if (!$resultPersonal) {
-            throw new Exception('Error en consulta PERSONAL_MOCK: ' . mysql_error($connProservipol));
-        }
+if ($useMock) {
+    // Usar PERSONAL_MOCK en la misma conexión proservipol_test
+    $funCodigoEsc = mysql_real_escape_string($funCodigo, $connPros);
+    $sqlPersonal = "SELECT
+                        PEFBCOD,
+                        PEFBRUT,
+                        PEFBNOM1,
+                        PEFBNOM2,
+                        PEFBAPEP,
+                        PEFBAPEM,
+                        PEFBESC,
+                        PEFBGRA,
+                        ESC_CODIGO,
+                        GRA_CODIGO,
+                        GRADO_DESCRIPCION,
+                        REPARTICION_DESC,
+                        REPARTICION_DEP,
+                        ALTA_REPARTICION,
+                        PEFBACT
+                    FROM PERSONAL_MOCK
+                    WHERE PEFBCOD = '{$funCodigoEsc}'";
 
-    } else {
-        // === PRODUCCIÓN: Conectarse a la base de datos de Personal real ===
-        require_once(dirname(__FILE__) . '/../../inc/configPersonal.inc.php');
-        
-        $connPersonal = mysql_connect(HOST_PERSONAL, DB_USER_PERSONAL, DB_PASS_PERSONAL, true);
-        if (!$connPersonal) {
-            throw new Exception('Error de conexión con la base de datos de Personal: ' . mysql_error());
-        }
-        
-        if (!mysql_select_db(DB_PERSONAL, $connPersonal)) {
-            throw new Exception('Error al seleccionar BD Personal: ' . mysql_error());
-        }
-        
-        mysql_query("SET NAMES 'utf8'", $connPersonal);
-        
-        $sqlPersonal = "SELECT 
-            PEFBCOD,
-            PEFBRUT,
-            PEFBNOM1,
-            PEFBNOM2,
-            PEFBAPEP,
-            PEFBAPEM,
-            PEFBGRA,
-            GRADO_DESCRIPCION,
-            REPARTICION_DESC,
-            REPARTICION_DEP
-        FROM personal_view
-        WHERE PEFBCOD = '$codFuncionarioEscaped'
-        LIMIT 1";
-        
-        $resultPersonal = mysql_query($sqlPersonal, $connPersonal);
-        
-        if (!$resultPersonal) {
-            throw new Exception('Error en consulta Personal: ' . mysql_error($connPersonal));
-        }
-    }
+    $resPersonal = mysql_query($sqlPersonal, $connPros);
 
-    if (mysql_num_rows($resultPersonal) > 0) {
-        // CASO 4: Funcionario encontrado en BD Personal
-        $funcionario = mysql_fetch_assoc($resultPersonal);
-        
-        $funcionarioData = array(
-            'codigo' => $funcionario['PEFBCOD'],
-            'rut' => $funcionario['PEFBRUT'],
-            'nombre' => trim($funcionario['PEFBNOM1'] . ' ' . $funcionario['PEFBNOM2']),
-            'apellidoPaterno' => $funcionario['PEFBAPEP'],
-            'apellidoMaterno' => $funcionario['PEFBAPEM'],
-            'grado' => $funcionario['GRADO_DESCRIPCION'],
-            'unidad' => $funcionario['REPARTICION_DESC'],
-            'departamento' => $funcionario['REPARTICION_DEP']
+    if ($resPersonal && mysql_num_rows($resPersonal) > 0) {
+        $row = mysql_fetch_array($resPersonal);
+        $datosFuncionario = array(
+            "funCodigo"       => $row["PEFBCOD"],
+            "funRut"          => $row["PEFBRUT"],
+            "funNombre"       => utf8_encode($row["PEFBNOM1"]),
+            "funNombre2"      => utf8_encode($row["PEFBNOM2"]),
+            "funApellidoP"    => utf8_encode($row["PEFBAPEP"]),
+            "funApellidoM"    => utf8_encode($row["PEFBAPEM"]),
+            "escCodigo"       => $row["ESC_CODIGO"],
+            "graCodigo"       => $row["GRA_CODIGO"],
+            "graDescripcion"  => utf8_encode($row["GRADO_DESCRIPCION"]),
+            "reparticionDesc" => utf8_encode($row["REPARTICION_DESC"]),
+            "reparticionDep"  => utf8_encode($row["REPARTICION_DEP"]),
+            "altaReparticion" => utf8_encode($row["ALTA_REPARTICION"]),
+            "activo"          => (int)$row["PEFBACT"]
         );
-        
-        $encontrado = true;
-        $origen = $useMock ? 'PERSONAL_MOCK' : 'PERSONAL';
-        
-    } else {
-        // CASO 5: NO encontrado en ninguna base de datos
-        if (!$useMock && isset($connPersonal)) {
-            mysql_close($connPersonal);
-        }
-        mysql_close($connProservipol);
-        
-        header('HTTP/1.1 404 Not Found');
-        echo json_encode(array(
-            'success' => false,
-            'yaRegistrado' => false,
-            'usuarioInactivo' => false,
-            'message' => 'NO EXISTE FUNCIONARIO PARA EL CODIGO INDICADO'
-        ));
+    }
+} else {
+    // Conexión a base de datos de personal real
+    $connPersonal = mysql_connect(HOST_PERSONAL, USER_PERSONAL, PASS_PERSONAL);
+    if (!$connPersonal) {
+        echo json_encode(array("success" => false, "message" => "Error al conectar con base de datos de personal"));
         exit;
     }
+    if (!mysql_select_db(DB_PERSONAL, $connPersonal)) {
+        echo json_encode(array("success" => false, "message" => "Error al seleccionar base de datos de personal"));
+        exit;
+    }
+    mysql_query("SET NAMES 'utf8'", $connPersonal);
 
-    // Cerrar conexión de Personal solo si fue abierta (producción)
-    if (!$useMock && isset($connPersonal)) {
-        mysql_close($connPersonal);
+    $funCodigoEsc = mysql_real_escape_string($funCodigo, $connPersonal);
+    $sqlPersonal = "SELECT * FROM personal_view WHERE PEFBCOD = '{$funCodigoEsc}'";
+    $resPersonal = mysql_query($sqlPersonal, $connPersonal);
+
+    if ($resPersonal && mysql_num_rows($resPersonal) > 0) {
+        $row = mysql_fetch_array($resPersonal);
+        $datosFuncionario = array(
+            "funCodigo"       => $row["PEFBCOD"],
+            "funRut"          => $row["PEFBRUT"],
+            "funNombre"       => utf8_encode($row["PEFBNOM1"]),
+            "funNombre2"      => utf8_encode($row["PEFBNOM2"]),
+            "funApellidoP"    => utf8_encode($row["PEFBAPEP"]),
+            "funApellidoM"    => utf8_encode($row["PEFBAPEM"]),
+            "escCodigo"       => $row["ESC_CODIGO"],
+            "graCodigo"       => $row["GRA_CODIGO"],
+            "graDescripcion"  => utf8_encode($row["GRADO_DESCRIPCION"]),
+            "reparticionDesc" => utf8_encode($row["REPARTICION_DESC"]),
+            "reparticionDep"  => utf8_encode($row["REPARTICION_DEP"]),
+            "altaReparticion" => utf8_encode($row["ALTA_REPARTICION"]),
+            "activo"          => (int)$row["PEFBACT"]
+        );
     }
-    
-    // ========================================
-    // PASO 3: Verificar curso PROSERVIPOL
-    // ========================================
-    $cursoInfo = array(
-        'tieneCurso' => false,
-        'mensaje' => 'EL USUARIO NO TIENE EL CURSO PROSERVIPOL APROBADO'
-    );
-    
-    // Verificar si existe la tabla de cursos
-    $checkTableCursos = mysql_query("SHOW TABLES LIKE 'CAPACITACION'", $connProservipol);
-    
-    if (mysql_num_rows($checkTableCursos) > 0) {
-        // Buscar en tabla de cursos
-        $sqlCurso = "SELECT 
-            FECHA_CAPACITACION,
-            NOTA_PROSERVIPOL
-        FROM CAPACITACION
-        WHERE FUN_CODIGO = '$codFuncionarioEscaped'
-        AND ACTIVO = 1
-        AND TIPO_CAPACITACION = 'CURSO PROSERVIPOL'
-        ORDER BY FECHA_CAPACITACION DESC
-        LIMIT 1";
-        
-        $resultCurso = mysql_query($sqlCurso, $connProservipol);
-        
-        if ($resultCurso && mysql_num_rows($resultCurso) > 0) {
-            $curso = mysql_fetch_assoc($resultCurso);
-            if (!empty($curso['FECHA_CAPACITACION'])) {
-                $fechaAprobacion = date('d/m/Y', strtotime($curso['FECHA_CAPACITACION']));
-                $cursoInfo = array(
-                    'tieneCurso' => true,
-                    'fechaAprobacion' => $fechaAprobacion,
-                    'nota' => $curso['NOTA_PROSERVIPOL'],
-                    'mensaje' => 'EL FUNCIONARIO TIENE EL CURSO APROBADO CON FECHA ' . $fechaAprobacion
-                );
-            }
-        }
-    }
-    
-    mysql_close($connProservipol);
-    
-    // ========================================
-    // RESPUESTA EXITOSA
-    // ========================================
-    header('HTTP/1.1 200 OK');
-    echo json_encode(array(
-        'success' => true,
-        'yaRegistrado' => false,
-        'usuarioInactivo' => false,
-        'message' => 'Funcionario encontrado',
-        'origen' => $origen,
-        'data' => $funcionarioData,
-        'curso' => $cursoInfo
-    ));
-    
-} catch (Exception $e) {
-    // CASO 6: Error de conexión o excepción
-    error_log("Error en buscarFuncionarioPersonal: " . $e->getMessage());
-    
-    header('HTTP/1.1 500 Internal Server Error');
-    echo json_encode(array(
-        'success' => false,
-        'yaRegistrado' => false,
-        'usuarioInactivo' => false,
-        'message' => 'Error al buscar funcionario: ' . $e->getMessage()
-    ));
+    mysql_close($connPersonal);
 }
+
+// Funcionario no encontrado en personal
+if (!$datosFuncionario) {
+    mysql_close($connPros);
+    echo json_encode(array(
+        "success"  => false,
+        "message"  => "Funcionario no encontrado en base de datos de personal"
+    ));
+    exit;
+}
+
+// ─── Verificar si ya está registrado como usuario en PROSERVIPOL ───────────
+$funCodigoEsc = mysql_real_escape_string($funCodigo, $connPros);
+$sqlUsuario = "SELECT FUN_CODIGO, US_LOGIN, US_ACTIVO, TUS_CODIGO
+               FROM USUARIO
+               WHERE FUN_CODIGO = '{$funCodigoEsc}'";
+$resUsuario = mysql_query($sqlUsuario, $connPros);
+$yaRegistrado = false;
+$datosUsuario = null;
+
+if ($resUsuario && mysql_num_rows($resUsuario) > 0) {
+    $rowU = mysql_fetch_array($resUsuario);
+    $yaRegistrado = true;
+    $datosUsuario = array(
+        "usLogin"   => $rowU["US_LOGIN"],
+        "usActivo"  => (int)$rowU["US_ACTIVO"],
+        "tusCodigo" => (int)$rowU["TUS_CODIGO"]
+    );
+}
+
+// ─── Verificar capacitación (informativo) ─────────────────────────────────
+$tieneCapacitacion = false;
+$datosCapacitacion = null;
+
+$sqlCap = "SELECT TIPO_CAPACITACION, VERSION_PROSERVIPOL, NOTA_PROSERVIPOL, FECHA_VALIDEZ
+           FROM CAPACITACION
+           WHERE FUN_CODIGO = '{$funCodigoEsc}'
+           AND ACTIVO = 1
+           ORDER BY FECHA_VALIDEZ DESC
+           LIMIT 1";
+$resCap = mysql_query($sqlCap, $connPros);
+
+if ($resCap && mysql_num_rows($resCap) > 0) {
+    $rowC = mysql_fetch_array($resCap);
+    $tieneCapacitacion = true;
+    $datosCapacitacion = array(
+        "tipoCap"    => utf8_encode($rowC["TIPO_CAPACITACION"]),
+        "version"    => $rowC["VERSION_PROSERVIPOL"],
+        "nota"       => $rowC["NOTA_PROSERVIPOL"],
+        "fechaValidez" => $rowC["FECHA_VALIDEZ"]
+    );
+}
+
+mysql_close($connPros);
+
+// ─── Respuesta final ───────────────────────────────────────────────────────
+echo json_encode(array(
+    "success"           => true,
+    "yaRegistrado"      => $yaRegistrado,
+    "datosUsuario"      => $datosUsuario,
+    "datosFuncionario"  => $datosFuncionario,
+    "tieneCapacitacion" => $tieneCapacitacion,
+    "datosCapacitacion" => $datosCapacitacion
+));
+exit;
 ?>

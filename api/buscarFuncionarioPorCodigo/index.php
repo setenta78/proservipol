@@ -1,69 +1,45 @@
 <?php
-session_start();
-
-// Incluir librería JSON para PHP 5.1.2
-require_once "../../inc/Services_JSON.php";
-$json = new Services_JSON();
-
-// Incluir tools.php PRIMERO (compatible con PHP 5.1.2)
+/**
+ * buscarFuncionarioPorCodigo/index.php
+ * Busca un usuario PROSERVIPOL registrado por su código de funcionario.
+ * Compatible con PHP 5.1.2 + MySQL 5.0.77
+ */
+ob_start();
 include_once("../tools.php");
+session_start();
+include_once("../../inc/config.inc.php");
+include_once("../db/dbUsuario.Class.php");
+include_once("request.php");
+ob_end_clean();
 
-// Deshabilitar salida de errores HTML
-error_reporting(0);
-ini_set('display_errors', 0);
+header('Content-Type: application/json; charset=utf-8');
 
-// Validar sesión activa
-if (!isset($_SESSION['USUARIO_CODIGOFUNCIONARIO'])) {
-    header('Content-Type: application/json; charset=UTF-8');
+if (!isset($_SESSION['FUN_CODIGO'])) {
     http_response_code(401);
-    echo json_encode(array(
-        "success" => false,
-        "message" => "Sesión no válida. Por favor, inicie sesión nuevamente.",
-        "code" => 401
-    ));
+    echo json_encode(array("success" => false, "message" => "Sesión no iniciada", "code" => 401));
     exit;
 }
 
-include_once("../db/dbUsuario.Class.php");
-include_once("request.php");
+$params = rules();
+if ($params["code"] == "412") {
+    http_response_code(412);
+    echo json_encode($params);
+    exit;
+}
 
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Credentials: true');
-header('Access-Control-Max-Age: 86400');
-header("Access-Control-Allow-Headers: X-API-KEY, Origin, X-Requested-With, Content-Type, Accept");
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE');
-header('Content-Type: application/json; charset=UTF-8');
+$objDBUsuario = new dbUsuario();
+$resultado = $objDBUsuario->buscarUsuarioPorCodigo($params['funCodigo']);
 
-try {
-    $params = rules();
-    
-    if ($params["code"] == "412") {
-        http_response_code(412);
-        echo json_encode($params);
-        exit;
-    }
-    
-    $objDBUsuario = new dbUsuario();
-    $resultado = $objDBUsuario->buscarUsuarioPorCodigo($params['codFuncionario']);
-    
-    if (isset($resultado['data']) && $resultado['data'] !== false) {
-        http_response_code(200);
-        echo json_encode($resultado);
-    } else {
-        http_response_code(404);
-        echo json_encode(array(
-            "success" => false,
-            "message" => "Usuario no encontrado por código de funcionario",
-            "data" => false
-        ));
-    }
-    
-} catch (Exception $e) {
-    http_response_code(500);
+if (isset($resultado['data']) && $resultado['data'] !== false) {
+    http_response_code(200);
+    echo json_encode($resultado);
+} else {
+    http_response_code(404);
     echo json_encode(array(
         "success" => false,
-        "message" => "Error interno del servidor: " . $e->getMessage(),
-        "code" => 500
+        "message" => "Usuario no encontrado",
+        "data"    => false
     ));
 }
+exit;
 ?>

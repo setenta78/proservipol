@@ -1,76 +1,111 @@
 <?php
-session_start();
-// Incluir tools.php PRIMERO (compatible con PHP 5.1.2)
+/**
+ * eliminarUsuario/index.php
+ * Desactiva un usuario (baja lógica: US_ACTIVO = 0)
+ * Compatible con PHP 5.1.2 + MySQL 5.0.77
+ */
+ob_start();
 include_once("../tools.php");
-// Deshabilitar salida de errores HTML
-error_reporting(0);
-ini_set('display_errors', 0);
-// Validar sesión activa
-if (!isset($_SESSION['user_id'])) {
-    header('Content-Type: application/json; charset=UTF-8');
+session_start();
+include_once("../../inc/config.inc.php");
+ob_end_clean();
+
+header('Content-Type: application/json; charset=utf-8');
+
+if (!isset($_SESSION['FUN_CODIGO'])) {
     http_response_code(401);
-    echo json_encode(array(
-        "success" => false,
-        "message" => "Sesión no válida. Por favor, inicie sesión nuevamente.",
-        "code" => 401
-    ));
+    echo json_encode(array("success" => false, "message" => "Sesión no iniciada", "code" => 401));
     exit;
 }
-include_once("../db/dbUsuario.Class.php");
-include_once("request.php");
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Credentials: true');
-header('Access-Control-Max-Age: 86400');
-header("Access-Control-Allow-Headers: X-API-KEY, Origin, X-Requested-With, Content-Type, Accept");
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE');
-header('Content-Type: application/json; charset=UTF-8');
-// Solo permitir método DELETE o POST
-if ($_SERVER['REQUEST_METHOD'] !== 'DELETE' && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+
+// Solo ADMINISTRADOR o MESA DE AYUDA pueden eliminar
+$tusCodigoSesion = isset($_SESSION['TUS_CODIGO']) ? intval($_SESSION['TUS_CODIGO']) : 0;
+if (!in_array($tusCodigoSesion, array(90, 310))) {
+    http_response_code(403);
+    echo json_encode(array("success" => false, "message" => "No tiene permisos para eliminar usuarios", "code" => 403));
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'DELETE') {
     http_response_code(405);
-    echo json_encode(array(
-        "success" => false,
-        "message" => "Método no permitido. Use DELETE o POST.",
-        "code" => 405
-    ));
+    echo json_encode(array("success" => false, "message" => "Método no permitido", "code" => 405));
     exit;
 }
-try {
-    // Obtener datos del cuerpo de la petición
-    $json = file_get_contents('php://input');
-    $data = json_decode($json, true);
-    if (!$data) {
-        http_response_code(400);
-        echo json_encode(array(
-            "success" => false,
-            "message" => "Datos JSON inválidos",
-            "code" => 400
-        ));
-        exit;
+
+// Leer fun_codigo desde POST o JSON body
+$funCodigo = '';
+if (!empty($_POST['fun_codigo'])) {
+    $funCodigo = strtoupper(trim($_POST['fun_codigo']));
+} else {
+    $body = file_get_contents('php://input');
+    if ($body) {
+        $data = json_decode($body, true);
+        if (isset($data['fun_codigo'])) {
+            $funCodigo = strtoupper(trim($data['fun_codigo']));
+        }
     }
-    // Validar datos
-    $params = rules($data);
-    if ($params["code"] == "412") {
-        http_response_code(412);
-        echo json_encode($params);
-        exit;
-    }
-    // Agregar usuario que elimina el registro
-    $params['usuarioEliminacion'] = $_SESSION['user_id'];
-    $objDBUsuario = new dbUsuario();
-    $resultado = $objDBUsuario->eliminarUsuario($params);
-    if ($resultado['success']) {
-        http_response_code(200);
-        echo json_encode($resultado);
-    } else {
-        http_response_code(400);
-        echo json_encode($resultado);
-    }
-} catch (Exception $e) {
-    http_response_code(500);
-    echo json_encode(array(
-        "success" => false,
-        "message" => "Error interno del servidor: " . $e->getMessage(),
-        "code" => 500
-    ));
 }
+
+if (empty($funCodigo)) {
+    http_response_code(400);
+    echo json_encode(array("success" => false, "message" => "Código de funcionario requerido", "code" => 400));
+    exit;
+}
+
+$conn = mysql_connect(HOST, USER, PASS);
+if (!$conn) {
+    http_response_code(500);
+    echo json_encode(array("success" => false, "message" => "Error de conexión", "code" => 500));
+    exit;
+}
+if (!mysql_select_db(DB, $conn)) {
+    http_response_code(500);
+    echo json_encode(array("success" => false, "message" => "Error al seleccionar base de datos", "code" => 500));
+    exit;
+}
+mysql_query("SET NAMES 'utf8'", $conn);
+
+$funCodigoEsc = mysql_real_escape_string($funCodigo, $conn);
+
+// Verificar que el usuario existe
+$sqlCheck = "SELECT FUN_CODIGO, US_ACTIVO FROM USUARIO WHERE FUN_CODIGO = '{$funCodigoEsc}'";
+$resCheck = mysql_query($sqlCheck, $conn);
+if (!$resCheck || mysql_num_rows($resCheck) == 0) {
+    mysql_close($conn);
+    http_response_code(404);
+    echo json_encode(array("success" => false, "message" => "Usuario no encontrado", "code" => 404));
+    exit;
+}
+
+$rowCheck = mysql_fetch_array($resCheck);
+if ($rowCheck['US_ACTIVO'] == 0) {
+    mysql_close($conn);
+    echo json_encode(array("success" => false, "message" => "El usuario ya está desactivado"));
+    exit;
+}
+
+// No permitir que el usuario se elimine a sí mismo
+if ($funCodigo === $_SESSION['FUN_CODIGO']) {
+    mysql_close($conn);
+    http_response_code(400);
+    echo json_encode(array("success" => false, "message" => "No puede desactivar su propio usuario", "code" => 400));
+    exit;
+}
+
+$sql = "UPDATE USUARIO SET
+            US_ACTIVO = 0,
+            US_FECHAMODIFICACION = NOW()
+        WHERE FUN_CODIGO = '{$funCodigoEsc}'";
+
+$result = mysql_query($sql, $conn);
+
+if ($result && mysql_affected_rows($conn) > 0) {
+    mysql_close($conn);
+    echo json_encode(array("success" => true, "message" => "Usuario desactivado exitosamente"));
+} else {
+    $error = mysql_error($conn);
+    mysql_close($conn);
+    echo json_encode(array("success" => false, "message" => "Error al desactivar usuario: " . $error));
+}
+exit;
 ?>
