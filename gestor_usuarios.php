@@ -158,17 +158,14 @@ require_once "queries/config.php";
                             echo "<td class='border px-4 py-2'>
                                     <div class='flex items-center gap-2'>
                                         <button
-                                            onclick='abrirModal(\"{$row['FUN_CODIGO']}\")'
+                                            onclick='abrirModal("{$row['FUN_CODIGO']}")'
                                             class='text-blue-600 hover:text-blue-800'
                                             title='Editar'>
                                             <i class='fas fa-edit fa-lg'></i>
                                         </button>
-                                        <form id='form-eliminar-usuario2'>
-                                            <input type='hidden' name='codigo' value='" . htmlspecialchars($row['FUN_CODIGO']) . "'>
-                                            <button type='button' onclick='confirmarEliminarAjax(\"form-eliminar-usuario2\")' class='text-red-600 hover:text-red-800'>
-                                                <i class='fas fa-trash-alt fa-lg'></i>
-                                            </button>
-                                        </form>
+                                        <button type='button' onclick='confirmarEliminarAjax("{$row['FUN_CODIGO']}")' class='text-red-600 hover:text-red-800' title='Eliminar'>
+                                            <i class='fas fa-trash-alt fa-lg'></i>
+                                        </button>
                                     </div>
                                   </td>";
                             echo "</tr>";

@@ -4,6 +4,8 @@
  * Compatible con PHP 5.1.2 y MySQL 5.0.77
  */
 
+include_once(dirname(__FILE__) . '/../api/db/dbAutentificaTic.Class.php');
+
 /**
  * Crea un nuevo usuario en PROSERVIPOL
  * 
@@ -67,6 +69,11 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
     
     // CASO 2: Usuario existe pero está inactivo - REACTIVAR
     if ($usuarioExistente && $usuarioExistente['US_ACTIVO'] == '0') {
+        // ========================================
+        // TRANSACCIÓN ATÓMICA PARA REACTIVACIÓN
+        // ========================================
+        mysql_query("START TRANSACTION", $link);
+        
         // Encriptar contraseña (usar el método que use tu sistema)
         $passwordHash = md5($password);
         
@@ -81,6 +88,7 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
         $resultReactivar = mysql_query($sqlReactivar, $link);
         
         if (!$resultReactivar) {
+            mysql_query("ROLLBACK", $link);
             return array(
                 'success' => false,
                 'message' => 'Error al reactivar usuario: ' . mysql_error($link),
@@ -88,8 +96,58 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
             );
         }
         
+        // ========================================
+        // PASO ADICIONAL: Llamar a AutentificaTIC API para reactivar
+        // ========================================
+        // Obtener RUT del funcionario para llamar a la API
+        $sqlRut = "SELECT f.FUN_RUT 
+                   FROM FUNCIONARIO f 
+                   WHERE f.FUN_CODIGO = '$codFuncionario' 
+                   LIMIT 1";
+        $resultRut = mysql_query($sqlRut, $link);
+        $rut = '';
+        if ($resultRut && mysql_num_rows($resultRut) > 0) {
+            $funcData = mysql_fetch_assoc($resultRut);
+            $rut = $funcData['FUN_RUT'];
+        }
+        
+        // Si tenemos el RUT, intentar registrar en AutentificaTIC
+        if (!empty($rut)) {
+            // Obtener token de sesión del usuario creador
+            session_start();
+            $accessToken = isset($_SESSION['access_token']) ? $_SESSION['access_token'] : null;
+            
+            if ($accessToken) {
+                $api = new AutentificaTicAPI($accessToken);
+                $resultApi = $api->registrarUsuario($rut);
+                
+                if (!$resultApi['success']) {
+                    // Rollback: revertir la reactivación en BD
+                    mysql_query("ROLLBACK", $link);
+                    
+                    // Mensaje específico según el error
+                    $mensajeError = 'En este momento existe un problema de conexión con Autentificatic. Por favor intente nuevamente.';
+                    if (strpos($resultApi['message'], 'no encontrado') !== false) {
+                        $mensajeError = 'El funcionario no se encuentra registrado en Autentificatic.';
+                    } elseif (strpos($resultApi['message'], 'Plataforma') !== false) {
+                        $mensajeError = 'La plataforma no se encuentra registrada en Autentificatic.';
+                    }
+                    
+                    return array(
+                        'success' => false,
+                        'message' => $mensajeError,
+                        'code' => 500,
+                        'api_error' => $resultApi['message']
+                    );
+                }
+            }
+        }
+        
+        // Confirmar transacción
+        mysql_query("COMMIT", $link);
+        
         // Registrar en auditoría
-        registrarAuditoria($link, $usuarioCreador, 'REACTIVAR_USUARIO', 
+        registrarAuditoria($link, $usuarioCreador, 'REACTIVAR_USUARIO',
             'Usuario ' . $codFuncionario . ' reactivado');
         
         return array(
@@ -172,6 +230,11 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
         );
     }
     
+    // ========================================
+    // INICIAR TRANSACCIÓN PARA CREACIÓN
+    // ========================================
+    mysql_query("START TRANSACTION", $link);
+
     $funcionario = mysql_fetch_assoc($resultPersonal);
     
     if (!$useMock && isset($connPersonal)) {
@@ -239,18 +302,22 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
             );
         }
     }
-    
+
     // ========================================
-    // PASO 4: Insertar en tabla USUARIO
+    // PASO 4: Insertar en tabla USUARIO (dentro de transacción)
     // ========================================
     // Encriptar contraseña (usar el método que use tu sistema)
     $passwordHash = md5($password);
     
+    // Obtener RUT del funcionario
+    $rut = mysql_real_escape_string($funcionario['PEFBRUT'], $link);
+
     $sqlInsertUsuario = "INSERT INTO USUARIO (
         FUN_CODIGO,
         UNI_CODIGO,
         US_LOGIN,
-        US_CLAVE,
+        US_RUT,
+        US_PASSWORD,
         TUS_CODIGO,
         US_FECHACREACION,
         US_ACTIVO
@@ -258,32 +325,65 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
         '$codFuncionario',
         $codigoUnidad,
         '$codFuncionario',
+        '$rut',
         '$passwordHash',
         $tipoUsuario,
         NOW(),
         1
     )";
-    
+
     $resultInsertUsuario = mysql_query($sqlInsertUsuario, $link);
-    
+
     if (!$resultInsertUsuario) {
+        mysql_query("ROLLBACK", $link);
         return array(
             'success' => false,
             'message' => 'Error al crear usuario: ' . mysql_error($link),
             'code' => 500
         );
     }
-    
+
     // Registrar en auditoría
-    registrarAuditoria($link, $usuarioCreador, 'CREAR_USUARIO', 
+    registrarAuditoria($link, $usuarioCreador, 'CREAR_USUARIO',
         'Usuario ' . $codFuncionario . ' creado exitosamente');
-    
+
     // ========================================
-    // PASO 5: Registrar en AutentificaTIC API (opcional)
+    // PASO 5: Registrar en AutentificaTIC API
     // ========================================
-    // TODO: Implementar llamada a AutentificaTIC API si es necesario
-    // $resultAutentificatic = registrarEnAutentificatic($codFuncionario, $password);
+    // El RUT ya fue obtenido arriba
     
+    // Obtener token de sesión del usuario creador
+    session_start();
+    $accessToken = isset($_SESSION['access_token']) ? $_SESSION['access_token'] : null;
+    
+    if ($accessToken && !empty($rut)) {
+        $api = new AutentificaTicAPI($accessToken);
+        $resultApi = $api->registrarUsuario($rut);
+        
+        if (!$resultApi['success']) {
+            // Rollback: revertir toda la creación en BD
+            mysql_query("ROLLBACK", $link);
+            
+            // Mensaje específico según el error
+            $mensajeError = 'En este momento existe un problema de conexión con Autentificatic. Por favor intente nuevamente.';
+            if (strpos($resultApi['message'], 'no encontrado') !== false) {
+                $mensajeError = 'El funcionario no se encuentra registrado en Autentificatic.';
+            } elseif (strpos($resultApi['message'], 'Plataforma') !== false) {
+                $mensajeError = 'La plataforma no se encuentra registrada en Autentificatic.';
+            }
+            
+            return array(
+                'success' => false,
+                'message' => $mensajeError,
+                'code' => 500,
+                'api_error' => $resultApi['message']
+            );
+        }
+    }
+    
+    // Confirmar transacción
+    mysql_query("COMMIT", $link);
+
     // ========================================
     // RESPUESTA EXITOSA
     // ========================================
