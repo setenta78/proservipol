@@ -1,24 +1,32 @@
 <?php
-/**
- * request.php — Validación para buscarFuncionarioAprobado
- * Acepta fun_codigo (código de funcionario)
- * Compatible con PHP 5.1.2
- */
+
 function rules()
 {
-    $funCodigo = isset($_GET['fun_codigo']) ? strtoupper(trim($_GET['fun_codigo'])) : '';
-    $message   = array();
+    // Validar que el parámetro existe y no está vacío
+    $rut = isset($_GET['rut']) ? trim($_GET['rut']) : '';
 
-    if (empty($funCodigo)) {
-        $message["fun_codigo"] = "Se requiere el código del funcionario";
-    } elseif (strlen($funCodigo) < 6) {
-        $message["fun_codigo"] = "El código de funcionario debe tener al menos 6 caracteres";
+    $message = array();
+    
+    // Validación del RUT
+    if (empty($rut)) {
+        $message["rut"] = "Se requiere que indique el RUT del Funcionario";
+    } elseif (strlen($rut) < 7) {
+        $message["rut"] = "El RUT debe tener al menos 7 caracteres";
     }
 
+    // Si hay errores, retornar código 412
     if (count($message) > 0) {
-        return array("success" => false, "error" => $message, "code" => "412");
+        return array(
+            "success" => false,
+            "error" => $message,
+            "code" => "412"
+        );
     }
 
-    return array("funCodigo" => $funCodigo, "code" => "200");
+    // Si todo está correcto, retornar los datos validados
+    return array(
+        "rut" => $rut,
+        "code" => "200"
+    );
 }
 ?>

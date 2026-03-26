@@ -1,432 +1,371 @@
 <?php
-/**
- * dbUsuario.Class.php
- * Clase de acceso a datos para gestión de usuarios PROSERVIPOL
- * Compatible con PHP 5.1.2 + MySQL 5.0.77
- * Tablas reales: USUARIO, FUNCIONARIO, GRADO, UNIDAD, TIPO_USUARIO, CAPACITACION
- */
 include_once("../../inc/config.inc.php");
 include_once("conexion.Class.php");
-
 class dbUsuario extends Conexion
 {
     /**
-     * Busca un usuario registrado por FUN_CODIGO
+     * Busca un usuario por RUT
      */
-    function buscarUsuarioPorCodigo($funCodigo)
+    function buscarUsuario($params)
     {
         $conn = $this->conect();
-        $funCodigo = mysql_real_escape_string($funCodigo, $conn);
-
-        $sql = "SELECT
-                    u.FUN_CODIGO,
-                    u.UNI_CODIGO,
-                    u.US_LOGIN,
-                    u.TUS_CODIGO,
-                    u.US_FECHACREACION,
-                    u.US_FECHAMODIFICACION,
-                    u.US_ACTIVO,
-                    f.FUN_RUT,
-                    f.FUN_NOMBRE,
-                    f.FUN_NOMBRE2,
-                    f.FUN_APELLIDOPATERNO,
-                    f.FUN_APELLIDOMATERNO,
-                    f.ESC_CODIGO,
-                    f.GRA_CODIGO,
-                    g.GRA_DESCRIPCION,
-                    un.UNI_DESCRIPCION,
-                    t.TUS_DESCRIPCION,
-                    t.VALIDAR,
-                    t.VALIDAR_OIC,
-                    t.REGISTRAR,
-                    t.CONSULTAR_UNIDAD,
-                    t.CONSULTAR_PERFIL
-                FROM USUARIO u
-                INNER JOIN FUNCIONARIO f ON u.FUN_CODIGO = f.FUN_CODIGO
-                LEFT JOIN GRADO g ON f.ESC_CODIGO = g.ESC_CODIGO AND f.GRA_CODIGO = g.GRA_CODIGO
-                LEFT JOIN UNIDAD un ON u.UNI_CODIGO = un.UNI_CODIGO
-                LEFT JOIN TIPO_USUARIO t ON u.TUS_CODIGO = t.TUS_CODIGO
-                WHERE u.FUN_CODIGO = '{$funCodigo}'";
-
+        $rut = mysql_real_escape_string($params['rut'], $conn);
+        $sql = "SELECT 
+                    u.id_usuario,
+                    u.rut,
+                    u.cod_funcionario,
+                    u.primer_nombre,
+                    u.segundo_nombre,
+                    u.apellido_paterno,
+                    u.apellido_materno,
+                    u.email,
+                    u.id_perfil,
+                    p.nombre_perfil,
+                    u.estado,
+                    u.fecha_creacion,
+                    u.usuario_creacion,
+                    u.fecha_modificacion,
+                    u.usuario_modificacion
+                FROM usuarios u
+                LEFT JOIN perfiles p ON u.id_perfil = p.id_perfil
+                WHERE u.rut = '{$rut}'
+                AND u.fecha_eliminacion IS NULL";
         $result = $this->execute($conn, $sql);
+        // Leer datos ANTES de cerrar conexión
         $usuario = null;
-
         if ($myrow = mysql_fetch_array($result)) {
             $usuario = array(
-                "funCodigo"           => $myrow["FUN_CODIGO"],
-                "uniCodigo"           => $myrow["UNI_CODIGO"],
-                "uniDescripcion"      => utf8_encode($myrow["UNI_DESCRIPCION"]),
-                "usLogin"             => $myrow["US_LOGIN"],
-                "tusCodigo"           => $myrow["TUS_CODIGO"],
-                "tusDescripcion"      => utf8_encode($myrow["TUS_DESCRIPCION"]),
-                "usFechaCreacion"     => $myrow["US_FECHACREACION"],
-                "usFechaModificacion" => $myrow["US_FECHAMODIFICACION"],
-                "usActivo"            => $myrow["US_ACTIVO"],
-                "funRut"              => $myrow["FUN_RUT"],
-                "funNombre"           => utf8_encode($myrow["FUN_NOMBRE"]),
-                "funNombre2"          => utf8_encode($myrow["FUN_NOMBRE2"]),
-                "funApellidoPaterno"  => utf8_encode($myrow["FUN_APELLIDOPATERNO"]),
-                "funApellidoMaterno"  => utf8_encode($myrow["FUN_APELLIDOMATERNO"]),
-                "escCodigo"           => $myrow["ESC_CODIGO"],
-                "graCodigo"           => $myrow["GRA_CODIGO"],
-                "graDescripcion"      => utf8_encode($myrow["GRA_DESCRIPCION"]),
-                "permisos"            => array(
-                    "validar"          => (int)$myrow["VALIDAR"],
-                    "validarOic"       => (int)$myrow["VALIDAR_OIC"],
-                    "registrar"        => (int)$myrow["REGISTRAR"],
-                    "consultarUnidad"  => (int)$myrow["CONSULTAR_UNIDAD"],
-                    "consultarPerfil"  => (int)$myrow["CONSULTAR_PERFIL"]
-                )
+                "idUsuario"         => $myrow["id_usuario"],
+                "rut"               => $myrow["rut"],
+                "codFuncionario"    => $myrow["cod_funcionario"],
+                "primerNombre"      => utf8_encode($myrow["primer_nombre"]),
+                "segundoNombre"     => utf8_encode($myrow["segundo_nombre"]),
+                "apellidoPaterno"   => utf8_encode($myrow["apellido_paterno"]),
+                "apellidoMaterno"   => utf8_encode($myrow["apellido_materno"]),
+                "email"             => $myrow["email"],
+                "idPerfil"          => $myrow["id_perfil"],
+                "nombrePerfil"      => utf8_encode($myrow["nombre_perfil"]),
+                "estado"            => $myrow["estado"],
+                "fechaCreacion"     => $myrow["fecha_creacion"],
+                "usuarioCreacion"   => $myrow["usuario_creacion"],
+                "fechaModificacion" => $myrow["fecha_modificacion"],
+                "usuarioModificacion" => $myrow["usuario_modificacion"]
             );
         }
-
         $this->desconect();
-
-        return $usuario
-            ? array("success" => true, "data" => $usuario)
-            : array("success" => false, "data" => false, "message" => "Usuario no encontrado");
+        return $usuario ? 
+            array("success" => true, "data" => $usuario) : 
+            array("success" => false, "data" => false, "message" => "Usuario no encontrado");
     }
-
     /**
-     * Busca un usuario registrado por RUT (desde FUNCIONARIO)
+     * Busca un usuario por código de funcionario
      */
-    function buscarUsuarioPorRut($rut)
+    function buscarUsuarioPorCodigo($codFuncionario)
     {
         $conn = $this->conect();
-        $rut = mysql_real_escape_string($rut, $conn);
-
-        $sql = "SELECT
-                    u.FUN_CODIGO,
-                    u.UNI_CODIGO,
-                    u.US_LOGIN,
-                    u.TUS_CODIGO,
-                    u.US_FECHACREACION,
-                    u.US_FECHAMODIFICACION,
-                    u.US_ACTIVO,
-                    f.FUN_RUT,
-                    f.FUN_NOMBRE,
-                    f.FUN_NOMBRE2,
-                    f.FUN_APELLIDOPATERNO,
-                    f.FUN_APELLIDOMATERNO,
-                    f.ESC_CODIGO,
-                    f.GRA_CODIGO,
-                    g.GRA_DESCRIPCION,
-                    un.UNI_DESCRIPCION,
-                    t.TUS_DESCRIPCION,
-                    t.VALIDAR,
-                    t.VALIDAR_OIC,
-                    t.REGISTRAR,
-                    t.CONSULTAR_UNIDAD,
-                    t.CONSULTAR_PERFIL
-                FROM USUARIO u
-                INNER JOIN FUNCIONARIO f ON u.FUN_CODIGO = f.FUN_CODIGO
-                LEFT JOIN GRADO g ON f.ESC_CODIGO = g.ESC_CODIGO AND f.GRA_CODIGO = g.GRA_CODIGO
-                LEFT JOIN UNIDAD un ON u.UNI_CODIGO = un.UNI_CODIGO
-                LEFT JOIN TIPO_USUARIO t ON u.TUS_CODIGO = t.TUS_CODIGO
-                WHERE f.FUN_RUT = '{$rut}'";
-
+        $codFuncionario = mysql_real_escape_string($codFuncionario, $conn);
+        $sql = "SELECT 
+                    u.id_usuario,
+                    u.rut,
+                    u.cod_funcionario,
+                    u.primer_nombre,
+                    u.segundo_nombre,
+                    u.apellido_paterno,
+                    u.apellido_materno,
+                    u.email,
+                    u.id_perfil,
+                    p.nombre_perfil,
+                    u.estado,
+                    u.fecha_creacion,
+                    u.usuario_creacion,
+                    u.fecha_modificacion,
+                    u.usuario_modificacion
+                FROM usuarios u
+                LEFT JOIN perfiles p ON u.id_perfil = p.id_perfil
+                WHERE u.cod_funcionario = '{$codFuncionario}'
+                AND u.fecha_eliminacion IS NULL";
         $result = $this->execute($conn, $sql);
+        // Leer datos ANTES de cerrar conexión
         $usuario = null;
-
         if ($myrow = mysql_fetch_array($result)) {
             $usuario = array(
-                "funCodigo"           => $myrow["FUN_CODIGO"],
-                "uniCodigo"           => $myrow["UNI_CODIGO"],
-                "uniDescripcion"      => utf8_encode($myrow["UNI_DESCRIPCION"]),
-                "usLogin"             => $myrow["US_LOGIN"],
-                "tusCodigo"           => $myrow["TUS_CODIGO"],
-                "tusDescripcion"      => utf8_encode($myrow["TUS_DESCRIPCION"]),
-                "usFechaCreacion"     => $myrow["US_FECHACREACION"],
-                "usFechaModificacion" => $myrow["US_FECHAMODIFICACION"],
-                "usActivo"            => $myrow["US_ACTIVO"],
-                "funRut"              => $myrow["FUN_RUT"],
-                "funNombre"           => utf8_encode($myrow["FUN_NOMBRE"]),
-                "funNombre2"          => utf8_encode($myrow["FUN_NOMBRE2"]),
-                "funApellidoPaterno"  => utf8_encode($myrow["FUN_APELLIDOPATERNO"]),
-                "funApellidoMaterno"  => utf8_encode($myrow["FUN_APELLIDOMATERNO"]),
-                "escCodigo"           => $myrow["ESC_CODIGO"],
-                "graCodigo"           => $myrow["GRA_CODIGO"],
-                "graDescripcion"      => utf8_encode($myrow["GRA_DESCRIPCION"]),
-                "permisos"            => array(
-                    "validar"          => (int)$myrow["VALIDAR"],
-                    "validarOic"       => (int)$myrow["VALIDAR_OIC"],
-                    "registrar"        => (int)$myrow["REGISTRAR"],
-                    "consultarUnidad"  => (int)$myrow["CONSULTAR_UNIDAD"],
-                    "consultarPerfil"  => (int)$myrow["CONSULTAR_PERFIL"]
-                )
+                "idUsuario"         => $myrow["id_usuario"],
+                "rut"               => $myrow["rut"],
+                "codFuncionario"    => $myrow["cod_funcionario"],
+                "primerNombre"      => utf8_encode($myrow["primer_nombre"]),
+                "segundoNombre"     => utf8_encode($myrow["segundo_nombre"]),
+                "apellidoPaterno"   => utf8_encode($myrow["apellido_paterno"]),
+                "apellidoMaterno"   => utf8_encode($myrow["apellido_materno"]),
+                "email"             => $myrow["email"],
+                "idPerfil"          => $myrow["id_perfil"],
+                "nombrePerfil"      => utf8_encode($myrow["nombre_perfil"]),
+                "estado"            => $myrow["estado"],
+                "fechaCreacion"     => $myrow["fecha_creacion"],
+                "usuarioCreacion"   => $myrow["usuario_creacion"],
+                "fechaModificacion" => $myrow["fecha_modificacion"],
+                "usuarioModificacion" => $myrow["usuario_modificacion"]
             );
         }
-
         $this->desconect();
-
-        return $usuario
-            ? array("success" => true, "data" => $usuario)
-            : array("success" => false, "data" => false, "message" => "Usuario no encontrado");
+        return $usuario ? 
+            array("success" => true, "data" => $usuario) : 
+            array("success" => false, "data" => false, "message" => "Usuario no encontrado");
     }
-
     /**
-     * Lista todos los usuarios con datos completos
-     */
-    function listarUsuarios()
-    {
-        $conn = $this->conect();
-
-        $sql = "SELECT
-                    u.FUN_CODIGO,
-                    u.UNI_CODIGO,
-                    u.US_LOGIN,
-                    u.TUS_CODIGO,
-                    u.US_FECHACREACION,
-                    u.US_FECHAMODIFICACION,
-                    u.US_ACTIVO,
-                    f.FUN_RUT,
-                    f.FUN_NOMBRE,
-                    f.FUN_NOMBRE2,
-                    f.FUN_APELLIDOPATERNO,
-                    f.FUN_APELLIDOMATERNO,
-                    f.ESC_CODIGO,
-                    f.GRA_CODIGO,
-                    g.GRA_DESCRIPCION,
-                    un.UNI_DESCRIPCION,
-                    t.TUS_DESCRIPCION
-                FROM USUARIO u
-                INNER JOIN FUNCIONARIO f ON u.FUN_CODIGO = f.FUN_CODIGO
-                LEFT JOIN GRADO g ON f.ESC_CODIGO = g.ESC_CODIGO AND f.GRA_CODIGO = g.GRA_CODIGO
-                LEFT JOIN UNIDAD un ON u.UNI_CODIGO = un.UNI_CODIGO
-                LEFT JOIN TIPO_USUARIO t ON u.TUS_CODIGO = t.TUS_CODIGO
-                ORDER BY f.FUN_APELLIDOPATERNO, f.FUN_APELLIDOMATERNO, f.FUN_NOMBRE";
-
-        $result = $this->execute($conn, $sql);
-        $usuarios = array();
-
-        while ($myrow = mysql_fetch_array($result)) {
-            $usuarios[] = array(
-                "funCodigo"          => $myrow["FUN_CODIGO"],
-                "uniCodigo"          => $myrow["UNI_CODIGO"],
-                "uniDescripcion"     => utf8_encode($myrow["UNI_DESCRIPCION"]),
-                "usLogin"            => $myrow["US_LOGIN"],
-                "tusCodigo"          => $myrow["TUS_CODIGO"],
-                "tusDescripcion"     => utf8_encode($myrow["TUS_DESCRIPCION"]),
-                "usFechaCreacion"    => $myrow["US_FECHACREACION"],
-                "usFechaModificacion"=> $myrow["US_FECHAMODIFICACION"],
-                "usActivo"           => $myrow["US_ACTIVO"],
-                "funRut"             => $myrow["FUN_RUT"],
-                "funNombre"          => utf8_encode($myrow["FUN_NOMBRE"]),
-                "funNombre2"         => utf8_encode($myrow["FUN_NOMBRE2"]),
-                "funApellidoPaterno" => utf8_encode($myrow["FUN_APELLIDOPATERNO"]),
-                "funApellidoMaterno" => utf8_encode($myrow["FUN_APELLIDOMATERNO"]),
-                "graDescripcion"     => utf8_encode($myrow["GRA_DESCRIPCION"]),
-                "nombreCompleto"     => utf8_encode(
-                    trim($myrow["FUN_NOMBRE"] . " " . $myrow["FUN_NOMBRE2"]) .
-                    " " . $myrow["FUN_APELLIDOPATERNO"] .
-                    " " . $myrow["FUN_APELLIDOMATERNO"]
-                )
-            );
-        }
-
-        $this->desconect();
-
-        return array(
-            "success" => true,
-            "data"    => $usuarios,
-            "total"   => count($usuarios)
-        );
-    }
-
-    /**
-     * Crea un nuevo usuario en USUARIO
-     * Campos editables: UNI_CODIGO, US_LOGIN, US_PASSWORD, TUS_CODIGO, US_ACTIVO
+     * Crea un nuevo usuario
      */
     function crearUsuario($params)
     {
         $conn = $this->conect();
-
-        $funCodigo  = mysql_real_escape_string($params['funCodigo'], $conn);
-        $uniCodigo  = intval($params['uniCodigo']);
-        $usLogin    = mysql_real_escape_string($params['usLogin'], $conn);
-        $usPassword = mysql_real_escape_string($params['usPassword'], $conn);
-        $tusCodigo  = intval($params['tusCodigo']);
-        $usActivo   = isset($params['usActivo']) ? intval($params['usActivo']) : 1;
-
-        // Verificar que el funcionario existe
-        $sqlFun = "SELECT FUN_CODIGO FROM FUNCIONARIO WHERE FUN_CODIGO = '{$funCodigo}'";
-        $resFun = $this->execute($conn, $sqlFun);
-        if (mysql_num_rows($resFun) == 0) {
+        // Escapar datos
+        $rut = mysql_real_escape_string($params['rut'], $conn);
+        $codFuncionario = mysql_real_escape_string($params['codFuncionario'], $conn);
+        $primerNombre = mysql_real_escape_string($params['primerNombre'], $conn);
+        $segundoNombre = mysql_real_escape_string($params['segundoNombre'], $conn);
+        $apellidoPaterno = mysql_real_escape_string($params['apellidoPaterno'], $conn);
+        $apellidoMaterno = mysql_real_escape_string($params['apellidoMaterno'], $conn);
+        $email = mysql_real_escape_string($params['email'], $conn);
+        $idPerfil = intval($params['idPerfil']);
+        $estado = intval($params['estado']);
+        $usuarioCreacion = intval($params['usuarioCreacion']);
+        
+        // Verificar si el usuario ya existe
+        $sqlCheck = "SELECT id_usuario FROM usuarios 
+                     WHERE (rut = '{$rut}' OR cod_funcionario = '{$codFuncionario}' OR email = '{$email}')
+                     AND fecha_eliminacion IS NULL";
+        
+        $resultCheck = $this->execute($conn, $sqlCheck);
+        if (mysql_num_rows($resultCheck) > 0) {
             $this->desconect();
-            return array("success" => false, "message" => "Funcionario no encontrado en el sistema");
+            return array(
+                "success" => false,
+                "message" => "Ya existe un usuario con ese RUT, Código de Funcionario o Email"
+            );
         }
-
-        // Verificar que no existe ya como usuario
-        $sqlCheck = "SELECT FUN_CODIGO FROM USUARIO WHERE FUN_CODIGO = '{$funCodigo}'";
-        $resCheck = $this->execute($conn, $sqlCheck);
-        if (mysql_num_rows($resCheck) > 0) {
-            $this->desconect();
-            return array("success" => false, "message" => "El funcionario ya tiene un usuario registrado");
-        }
-
-        // Verificar que US_LOGIN no está en uso
-        $sqlLogin = "SELECT FUN_CODIGO FROM USUARIO WHERE US_LOGIN = '{$usLogin}'";
-        $resLogin = $this->execute($conn, $sqlLogin);
-        if (mysql_num_rows($resLogin) > 0) {
-            $this->desconect();
-            return array("success" => false, "message" => "El login ya está en uso por otro usuario");
-        }
-
-        // Verificar que UNI_CODIGO existe
-        $sqlUni = "SELECT UNI_CODIGO FROM UNIDAD WHERE UNI_CODIGO = {$uniCodigo}";
-        $resUni = $this->execute($conn, $sqlUni);
-        if (mysql_num_rows($resUni) == 0) {
-            $this->desconect();
-            return array("success" => false, "message" => "La unidad especificada no existe");
-        }
-
-        // Verificar que TUS_CODIGO existe y está activo
-        $sqlTus = "SELECT TUS_CODIGO FROM TIPO_USUARIO WHERE TUS_CODIGO = {$tusCodigo} AND TUS_ACTIVO = 1";
-        $resTus = $this->execute($conn, $sqlTus);
-        if (mysql_num_rows($resTus) == 0) {
-            $this->desconect();
-            return array("success" => false, "message" => "El tipo de usuario especificado no es válido");
-        }
-
-        $sql = "INSERT INTO USUARIO (
-                    FUN_CODIGO,
-                    UNI_CODIGO,
-                    US_LOGIN,
-                    US_PASSWORD,
-                    TUS_CODIGO,
-                    US_FECHACREACION,
-                    US_ACTIVO
+        // Insertar nuevo usuario
+        $sql = "INSERT INTO usuarios (
+                    rut,
+                    cod_funcionario,
+                    primer_nombre,
+                    segundo_nombre,
+                    apellido_paterno,
+                    apellido_materno,
+                    email,
+                    id_perfil,
+                    estado,
+                    fecha_creacion,
+                    usuario_creacion
                 ) VALUES (
-                    '{$funCodigo}',
-                    {$uniCodigo},
-                    '{$usLogin}',
-                    '{$usPassword}',
-                    {$tusCodigo},
+                    '{$rut}',
+                    '{$codFuncionario}',
+                    '{$primerNombre}',
+                    '{$segundoNombre}',
+                    '{$apellidoPaterno}',
+                    '{$apellidoMaterno}',
+                    '{$email}',
+                    {$idPerfil},
+                    {$estado},
                     NOW(),
-                    {$usActivo}
+                    {$usuarioCreacion}
                 )";
-
         $result = $this->execute($conn, $sql);
-
         if ($result) {
+            $idUsuario = mysql_insert_id($conn);
             $this->desconect();
-            return array("success" => true, "message" => "Usuario creado exitosamente", "funCodigo" => $funCodigo);
+            return array(
+                "success" => true,
+                "message" => "Usuario creado exitosamente",
+                "data" => array("idUsuario" => $idUsuario)
+            );
         } else {
             $error = mysql_error($conn);
             $this->desconect();
-            return array("success" => false, "message" => "Error al crear usuario: " . $error);
+            
+            return array(
+                "success" => false,
+                "message" => "Error al crear usuario: " . $error
+            );
         }
     }
-
-    /**
+     /**
      * Edita un usuario existente
-     * Campos editables: UNI_CODIGO, US_LOGIN, US_PASSWORD, TUS_CODIGO, US_ACTIVO
      */
     function editarUsuario($params)
     {
         $conn = $this->conect();
-
-        $funCodigo  = mysql_real_escape_string($params['funCodigo'], $conn);
-        $uniCodigo  = intval($params['uniCodigo']);
-        $usLogin    = mysql_real_escape_string($params['usLogin'], $conn);
-        $tusCodigo  = intval($params['tusCodigo']);
-        $usActivo   = intval($params['usActivo']);
-
-        // Verificar que el usuario existe
-        $sqlCheck = "SELECT FUN_CODIGO FROM USUARIO WHERE FUN_CODIGO = '{$funCodigo}'";
-        $resCheck = $this->execute($conn, $sqlCheck);
-        if (mysql_num_rows($resCheck) == 0) {
+        // Escapar datos
+        $idUsuario = intval($params['idUsuario']);
+        $email = mysql_real_escape_string($params['email'], $conn);
+        $idPerfil = intval($params['idPerfil']);
+        $estado = intval($params['estado']);
+        $usuarioModificacion = intval($params['usuarioModificacion']);
+        // Verificar si el usuario existe
+        $sqlCheck = "SELECT id_usuario FROM usuarios 
+                     WHERE id_usuario = {$idUsuario}
+                     AND fecha_eliminacion IS NULL";
+        
+        $resultCheck = $this->execute($conn, $sqlCheck);
+        
+        if (mysql_num_rows($resultCheck) == 0) {
             $this->desconect();
-            return array("success" => false, "message" => "Usuario no encontrado");
+            return array(
+                "success" => false,
+                "message" => "Usuario no encontrado"
+            );
         }
-
-        // Verificar que US_LOGIN no está en uso por otro usuario
-        $sqlLogin = "SELECT FUN_CODIGO FROM USUARIO
-                     WHERE US_LOGIN = '{$usLogin}' AND FUN_CODIGO != '{$funCodigo}'";
-        $resLogin = $this->execute($conn, $sqlLogin);
-        if (mysql_num_rows($resLogin) > 0) {
+        
+        // Verificar si el email ya está en uso por otro usuario
+        $sqlCheckEmail = "SELECT id_usuario FROM usuarios 
+                          WHERE email = '{$email}'
+                          AND id_usuario != {$idUsuario}
+                          AND fecha_eliminacion IS NULL";
+        
+        $resultCheckEmail = $this->execute($conn, $sqlCheckEmail);
+        
+        if (mysql_num_rows($resultCheckEmail) > 0) {
             $this->desconect();
-            return array("success" => false, "message" => "El login ya está en uso por otro usuario");
+            return array(
+                "success" => false,
+                "message" => "El email ya está en uso por otro usuario"
+            );
         }
-
-        // Verificar que UNI_CODIGO existe
-        $sqlUni = "SELECT UNI_CODIGO FROM UNIDAD WHERE UNI_CODIGO = {$uniCodigo}";
-        $resUni = $this->execute($conn, $sqlUni);
-        if (mysql_num_rows($resUni) == 0) {
-            $this->desconect();
-            return array("success" => false, "message" => "La unidad especificada no existe");
-        }
-
-        // Verificar que TUS_CODIGO existe y está activo
-        $sqlTus = "SELECT TUS_CODIGO FROM TIPO_USUARIO WHERE TUS_CODIGO = {$tusCodigo} AND TUS_ACTIVO = 1";
-        $resTus = $this->execute($conn, $sqlTus);
-        if (mysql_num_rows($resTus) == 0) {
-            $this->desconect();
-            return array("success" => false, "message" => "El tipo de usuario especificado no es válido");
-        }
-
-        // Construir SET dinámico (password es opcional en edición)
-        $setParts = array(
-            "UNI_CODIGO = {$uniCodigo}",
-            "US_LOGIN = '{$usLogin}'",
-            "TUS_CODIGO = {$tusCodigo}",
-            "US_ACTIVO = {$usActivo}",
-            "US_FECHAMODIFICACION = NOW()"
-        );
-
-        // Si se envía nueva password, actualizarla
-        if (!empty($params['usPassword'])) {
-            $usPassword = mysql_real_escape_string($params['usPassword'], $conn);
-            $setParts[] = "US_PASSWORD = '{$usPassword}'";
-        }
-
-        $setClause = implode(", ", $setParts);
-        $sql = "UPDATE USUARIO SET {$setClause} WHERE FUN_CODIGO = '{$funCodigo}'";
-
+        
+        // Actualizar usuario
+        $sql = "UPDATE usuarios SET
+                    email = '{$email}',
+                    id_perfil = {$idPerfil},
+                    estado = {$estado},
+                    fecha_modificacion = NOW(),
+                    usuario_modificacion = {$usuarioModificacion}
+                WHERE id_usuario = {$idUsuario}";
+        
         $result = $this->execute($conn, $sql);
-
+        
         if ($result) {
             $this->desconect();
-            return array("success" => true, "message" => "Usuario actualizado exitosamente");
+            
+            return array(
+                "success" => true,
+                "message" => "Usuario actualizado exitosamente"
+            );
         } else {
             $error = mysql_error($conn);
             $this->desconect();
-            return array("success" => false, "message" => "Error al actualizar usuario: " . $error);
+            
+            return array(
+                "success" => false,
+                "message" => "Error al actualizar usuario: " . $error
+            );
         }
     }
-
+    
     /**
-     * Desactiva un usuario (baja lógica: US_ACTIVO = 0)
-     * No se elimina físicamente — la tabla no tiene campo de eliminación
+     * Elimina un usuario (eliminación lógica)
      */
-    function eliminarUsuario($funCodigo)
+    function eliminarUsuario($params)
     {
         $conn = $this->conect();
-        $funCodigo = mysql_real_escape_string($funCodigo, $conn);
-
-        // Verificar que el usuario existe
-        $sqlCheck = "SELECT FUN_CODIGO FROM USUARIO WHERE FUN_CODIGO = '{$funCodigo}'";
-        $resCheck = $this->execute($conn, $sqlCheck);
-        if (mysql_num_rows($resCheck) == 0) {
+        
+        // Escapar datos
+        $idUsuario = intval($params['idUsuario']);
+        $usuarioEliminacion = intval($params['usuarioEliminacion']);
+        
+        // Verificar si el usuario existe
+        $sqlCheck = "SELECT id_usuario FROM usuarios 
+                     WHERE id_usuario = {$idUsuario}
+                     AND fecha_eliminacion IS NULL";
+        
+        $resultCheck = $this->execute($conn, $sqlCheck);
+        
+        if (mysql_num_rows($resultCheck) == 0) {
             $this->desconect();
-            return array("success" => false, "message" => "Usuario no encontrado");
+            return array(
+                "success" => false,
+                "message" => "Usuario no encontrado"
+            );
         }
-
-        $sql = "UPDATE USUARIO SET
-                    US_ACTIVO = 0,
-                    US_FECHAMODIFICACION = NOW()
-                WHERE FUN_CODIGO = '{$funCodigo}'";
-
+        
+        // Eliminar usuario (lógicamente)
+        $sql = "UPDATE usuarios SET
+                    fecha_eliminacion = NOW(),
+                    usuario_eliminacion = {$usuarioEliminacion}
+                WHERE id_usuario = {$idUsuario}";
+        
         $result = $this->execute($conn, $sql);
-
+        
         if ($result) {
             $this->desconect();
-            return array("success" => true, "message" => "Usuario desactivado exitosamente");
+            
+            return array(
+                "success" => true,
+                "message" => "Usuario eliminado exitosamente"
+            );
         } else {
             $error = mysql_error($conn);
             $this->desconect();
-            return array("success" => false, "message" => "Error al desactivar usuario: " . $error);
+            
+            return array(
+                "success" => false,
+                "message" => "Error al eliminar usuario: " . $error
+            );
         }
+    }
+    
+    /**
+     * Lista todos los usuarios activos
+     */
+    function listarUsuarios()
+    {
+        $conn = $this->conect();
+        
+        $sql = "SELECT 
+                    u.id_usuario,
+                    u.rut,
+                    u.cod_funcionario,
+                    u.primer_nombre,
+                    u.segundo_nombre,
+                    u.apellido_paterno,
+                    u.apellido_materno,
+                    u.email,
+                    u.id_perfil,
+                    p.nombre_perfil,
+                    u.estado,
+                    u.fecha_creacion
+                FROM usuarios u
+                LEFT JOIN perfiles p ON u.id_perfil = p.id_perfil
+                WHERE u.fecha_eliminacion IS NULL
+                ORDER BY u.apellido_paterno, u.apellido_materno, u.primer_nombre";
+        
+        $result = $this->execute($conn, $sql);
+        
+        // Leer datos ANTES de cerrar conexión
+        $usuarios = array();
+        
+        while ($myrow = mysql_fetch_array($result)) {
+            $usuarios[] = array(
+                "idUsuario"         => $myrow["id_usuario"],
+                "rut"               => $myrow["rut"],
+                "codFuncionario"    => $myrow["cod_funcionario"],
+                "primerNombre"      => utf8_encode($myrow["primer_nombre"]),
+                "segundoNombre"     => utf8_encode($myrow["segundo_nombre"]),
+                "apellidoPaterno"   => utf8_encode($myrow["apellido_paterno"]),
+                "apellidoMaterno"   => utf8_encode($myrow["apellido_materno"]),
+                "nombreCompleto"    => utf8_encode($myrow["primer_nombre"] . " " . $myrow["segundo_nombre"] . " " . $myrow["apellido_paterno"] . " " . $myrow["apellido_materno"]),
+                "email"             => $myrow["email"],
+                "idPerfil"          => $myrow["id_perfil"],
+                "nombrePerfil"      => utf8_encode($myrow["nombre_perfil"]),
+                "estado"            => $myrow["estado"],
+                "fechaCreacion"     => $myrow["fecha_creacion"]
+            );
+        }
+        
+        $this->desconect();
+        
+        return array(
+            "success" => true,
+            "data" => $usuarios,
+            "total" => count($usuarios)
+        );
     }
 }
 ?>

@@ -1,149 +1,89 @@
 <?php
-/**
- * editarUsuario/index.php
- * Edita un usuario existente en PROSERVIPOL.
- * Campos editables: UNI_CODIGO, US_LOGIN, US_PASSWORD (opcional), TUS_CODIGO, US_ACTIVO
- * Compatible con PHP 5.1.2 + MySQL 5.0.77
- */
-
-ob_start();
-
-if (!function_exists('json_encode')) {
-    require_once('../../lib/Services_JSON.php');
-    function json_encode($data) {
-        $json = new Services_JSON();
-        return $json->encode($data);
-    }
-}
-
 session_start();
-include_once("../../inc/config.inc.php");
+// Incluir tools.php PRIMERO (compatible con PHP 5.1.2)
+include_once("../tools.php");
 
-ob_end_clean();
-header('Content-Type: application/json; charset=utf-8');
+// Deshabilitar salida de errores HTML
+error_reporting(0);
+ini_set('display_errors', 0);
 
-// Solo POST
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    echo json_encode(array("success" => false, "message" => "Método no permitido"));
+// Validar sesión activa
+if (!isset($_SESSION['user_id'])) {
+    header('Content-Type: application/json; charset=UTF-8');
+    http_response_code(401);
+    echo json_encode(array(
+        "success" => false,
+        "message" => "Sesión no válida. Por favor, inicie sesión nuevamente.",
+        "code" => 401
+    ));
     exit;
 }
 
-// Verificar sesión
-if (!isset($_SESSION['FUN_CODIGO'])) {
-    echo json_encode(array("success" => false, "message" => "Sesión no iniciada"));
+include_once("../db/dbUsuario.Class.php");
+include_once("request.php");
+
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Credentials: true');
+header('Access-Control-Max-Age: 86400');
+header("Access-Control-Allow-Headers: X-API-KEY, Origin, X-Requested-With, Content-Type, Accept");
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE');
+header('Content-Type: application/json; charset=UTF-8');
+
+// Solo permitir método PUT o POST
+if ($_SERVER['REQUEST_METHOD'] !== 'PUT' && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(array(
+        "success" => false,
+        "message" => "Método no permitido. Use PUT o POST.",
+        "code" => 405
+    ));
     exit;
 }
 
-// Verificar permiso (solo ADMINISTRADOR o MESA DE AYUDA pueden editar)
-$tusCodigoSesion = isset($_SESSION['TUS_CODIGO']) ? intval($_SESSION['TUS_CODIGO']) : 0;
-if (!in_array($tusCodigoSesion, array(90, 310))) {
-    echo json_encode(array("success" => false, "message" => "No tiene permisos para editar usuarios"));
-    exit;
+try {
+    // Obtener datos del cuerpo de la petición
+    $json = file_get_contents('php://input');
+    $data = json_decode($json, true);
+    
+    if (!$data) {
+        http_response_code(400);
+        echo json_encode(array(
+            "success" => false,
+            "message" => "Datos JSON inválidos",
+            "code" => 400
+        ));
+        exit;
+    }
+    
+    // Validar datos
+    $params = rules($data);
+    
+    if ($params["code"] == "412") {
+        http_response_code(412);
+        echo json_encode($params);
+        exit;
+    }
+    
+    // Agregar usuario que modifica el registro
+    $params['usuarioModificacion'] = $_SESSION['user_id'];
+    
+    $objDBUsuario = new dbUsuario();
+    $resultado = $objDBUsuario->editarUsuario($params);
+    
+    if ($resultado['success']) {
+        http_response_code(200);
+        echo json_encode($resultado);
+    } else {
+        http_response_code(400);
+        echo json_encode($resultado);
+    }
+    
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(array(
+        "success" => false,
+        "message" => "Error interno del servidor: " . $e->getMessage(),
+        "code" => 500
+    ));
 }
-
-// Leer y validar parámetros
-$funCodigo = isset($_POST['fun_codigo']) ? strtoupper(trim($_POST['fun_codigo'])) : '';
-$uniCodigo = isset($_POST['uni_codigo']) ? intval($_POST['uni_codigo']) : 0;
-$usLogin   = isset($_POST['us_login'])   ? trim($_POST['us_login'])   : '';
-$tusCodigo = isset($_POST['tus_codigo']) ? intval($_POST['tus_codigo']) : 0;
-$usActivo  = isset($_POST['us_activo'])  ? intval($_POST['us_activo'])  : 1;
-$usPassword = isset($_POST['us_password']) ? trim($_POST['us_password']) : '';
-
-if (empty($funCodigo)) {
-    echo json_encode(array("success" => false, "message" => "Código de funcionario requerido"));
-    exit;
-}
-if (empty($usLogin)) {
-    echo json_encode(array("success" => false, "message" => "Login requerido"));
-    exit;
-}
-if ($uniCodigo <= 0) {
-    echo json_encode(array("success" => false, "message" => "Unidad requerida"));
-    exit;
-}
-if ($tusCodigo <= 0) {
-    echo json_encode(array("success" => false, "message" => "Tipo de usuario requerido"));
-    exit;
-}
-
-// Conexión
-$conn = mysql_connect(HOST, USER, PASS);
-if (!$conn) {
-    echo json_encode(array("success" => false, "message" => "Error de conexión"));
-    exit;
-}
-if (!mysql_select_db(DB, $conn)) {
-    echo json_encode(array("success" => false, "message" => "Error al seleccionar base de datos"));
-    exit;
-}
-mysql_query("SET NAMES 'utf8'", $conn);
-
-$funCodigoEsc = mysql_real_escape_string($funCodigo, $conn);
-$usLoginEsc   = mysql_real_escape_string($usLogin, $conn);
-
-// Verificar que el usuario existe
-$sqlCheck = "SELECT FUN_CODIGO FROM USUARIO WHERE FUN_CODIGO = '{$funCodigoEsc}'";
-$resCheck = mysql_query($sqlCheck, $conn);
-if (!$resCheck || mysql_num_rows($resCheck) == 0) {
-    mysql_close($conn);
-    echo json_encode(array("success" => false, "message" => "Usuario no encontrado"));
-    exit;
-}
-
-// Verificar que US_LOGIN no está en uso por otro usuario
-$sqlLogin = "SELECT FUN_CODIGO FROM USUARIO
-             WHERE US_LOGIN = '{$usLoginEsc}' AND FUN_CODIGO != '{$funCodigoEsc}'";
-$resLogin = mysql_query($sqlLogin, $conn);
-if ($resLogin && mysql_num_rows($resLogin) > 0) {
-    mysql_close($conn);
-    echo json_encode(array("success" => false, "message" => "El login ya está en uso por otro usuario"));
-    exit;
-}
-
-// Verificar que UNI_CODIGO existe
-$sqlUni = "SELECT UNI_CODIGO FROM UNIDAD WHERE UNI_CODIGO = {$uniCodigo}";
-$resUni = mysql_query($sqlUni, $conn);
-if (!$resUni || mysql_num_rows($resUni) == 0) {
-    mysql_close($conn);
-    echo json_encode(array("success" => false, "message" => "La unidad especificada no existe"));
-    exit;
-}
-
-// Verificar que TUS_CODIGO existe y está activo
-$sqlTus = "SELECT TUS_CODIGO FROM TIPO_USUARIO WHERE TUS_CODIGO = {$tusCodigo} AND TUS_ACTIVO = 1";
-$resTus = mysql_query($sqlTus, $conn);
-if (!$resTus || mysql_num_rows($resTus) == 0) {
-    mysql_close($conn);
-    echo json_encode(array("success" => false, "message" => "El tipo de usuario especificado no es válido"));
-    exit;
-}
-
-// Construir SET dinámico
-$setParts = array(
-    "UNI_CODIGO = {$uniCodigo}",
-    "US_LOGIN = '{$usLoginEsc}'",
-    "TUS_CODIGO = {$tusCodigo}",
-    "US_ACTIVO = {$usActivo}",
-    "US_FECHAMODIFICACION = NOW()"
-);
-
-if (!empty($usPassword)) {
-    $usPasswordEsc = mysql_real_escape_string($usPassword, $conn);
-    $setParts[] = "US_PASSWORD = '{$usPasswordEsc}'";
-}
-
-$setClause = implode(", ", $setParts);
-$sql = "UPDATE USUARIO SET {$setClause} WHERE FUN_CODIGO = '{$funCodigoEsc}'";
-
-$result = mysql_query($sql, $conn);
-
-if ($result) {
-    mysql_close($conn);
-    echo json_encode(array("success" => true, "message" => "Usuario actualizado exitosamente"));
-} else {
-    $error = mysql_error($conn);
-    mysql_close($conn);
-    echo json_encode(array("success" => false, "message" => "Error al actualizar: " . $error));
-}
-exit;
 ?>
