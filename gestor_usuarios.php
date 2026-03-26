@@ -192,7 +192,7 @@ require_once "queries/config.php";
                         }
                         echo "</ul></nav>";
                     } else {
-                        echo "<p class='text-center text-gray-600'><em>No existen registros.</em></p>";
+                        echo "<p class='text-center text-gray-600'><em>No existen usuarios registrados que cumplan con los parámetros de búsqueda indicados</em></p>";
                     }
                 } else {
                     echo "ERROR: " . mysql_error();

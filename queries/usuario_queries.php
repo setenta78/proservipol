@@ -4,116 +4,17 @@
  * Compatible con PHP 5.1.2 y MySQL 5.0.77
  */
 
-if (!defined('AUTENTIFICATIC_API_URL')) {
-    require_once dirname(__FILE__) . '/../inc/config_autentificatic.php';
-}
-
-/**
- * Limpia el RUT chileno: elimina puntos y guión
- * Ej: "13.498.948-3" → "134989483"
- */
-function limpiarRut($rut)
-{
-    return str_replace(array('.', '-', ' '), '', trim($rut));
-}
-
-/**
- * Registra un usuario en AutentificaTIC API
- * POST /api/nstitutional-app-user-from-external-app
- *
- * @param string $rut RUT del funcionario (cualquier formato, se limpia internamente)
- * @param string $token Bearer token del usuario logueado
- * @return array ['success' => bool, 'connection_error' => bool, 'message' => string]
- */
-function registrarEnAutentificatic($rut, $token)
-{
-    $url      = AUTENTIFICATIC_API_URL . '/api/nstitutional-app-user-from-external-app';
-    $rutLimpio = limpiarRut($rut);
-    $postData  = 'rut=' . urlencode($rutLimpio);
-
-    if (function_exists('curl_init')) {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-            'Authorization: Bearer ' . $token,
-            'Accept: application/json',
-            'Content-Type: application/x-www-form-urlencoded'
-        ));
-        $response  = curl_exec($ch);
-        $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-
-        if ($curlError || $httpCode === 0) {
-            return array(
-                'success'          => false,
-                'connection_error' => true,
-                'message'          => 'En este momento existe un problema de conexión con Autentificatic. Inténtelo más tarde.'
-            );
-        }
-        if ($httpCode >= 200 && $httpCode < 300) {
-            return array('success' => true, 'connection_error' => false, 'message' => 'Usuario registrado en AutentificaTIC');
-        }
-        return array(
-            'success'          => false,
-            'connection_error' => false,
-            'message'          => 'AutentificaTIC rechazó el registro (HTTP ' . $httpCode . '): ' . $response
-        );
-    }
-
-    // Fallback: file_get_contents
-    $context  = stream_context_create(array(
-        'http' => array(
-            'method'        => 'POST',
-            'header'        => "Authorization: Bearer $token\r\nAccept: application/json\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: " . strlen($postData) . "\r\n",
-            'content'       => $postData,
-            'timeout'       => 10,
-            'ignore_errors' => true
-        )
-    ));
-    $response = @file_get_contents($url, false, $context);
-
-    if ($response === false) {
-        return array(
-            'success'          => false,
-            'connection_error' => true,
-            'message'          => 'En este momento existe un problema de conexión con Autentificatic. Inténtelo más tarde.'
-        );
-    }
-
-    $httpCode = 500;
-    if (isset($http_response_header) && is_array($http_response_header)) {
-        if (preg_match('/HTTP\/[\d\.]+\s+(\d+)/', $http_response_header[0], $m)) {
-            $httpCode = (int)$m[1];
-        }
-    }
-
-    if ($httpCode >= 200 && $httpCode < 300) {
-        return array('success' => true, 'connection_error' => false, 'message' => 'Usuario registrado en AutentificaTIC');
-    }
-    return array(
-        'success'          => false,
-        'connection_error' => false,
-        'message'          => 'AutentificaTIC rechazó el registro (HTTP ' . $httpCode . '): ' . $response
-    );
-}
-
 /**
  * Crea un nuevo usuario en PROSERVIPOL
- *
+ * 
  * @param string $codFuncionario Código del funcionario
  * @param string $codigoUnidad Código de la unidad
  * @param string $tipoUsuario Tipo de usuario (perfil)
  * @param string $password Contraseña del usuario
  * @param string $usuarioCreador Código del usuario que crea el registro
- * @param string $token Bearer token del usuario logueado (para AutentificaTIC)
  * @return array Resultado de la operación
  */
-function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $password, $usuarioCreador, $token = '')
+function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $password, $usuarioCreador)
 {
     global $link;
     
@@ -133,8 +34,7 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
         u.FUN_CODIGO,
         f.FUN_NOMBRE,
         f.FUN_APELLIDOPATERNO,
-        f.FUN_APELLIDOMATERNO,
-        f.FUN_RUT
+        f.FUN_APELLIDOMATERNO
     FROM USUARIO u
     LEFT JOIN FUNCIONARIO f ON u.FUN_CODIGO = f.FUN_CODIGO
     WHERE u.US_LOGIN = '$codFuncionario'
