@@ -91,7 +91,8 @@ class AutentificaTicAPI {
                 'method'  => $method,
                 'header'  => implode("\r\n", $headers),
                 'content' => $dataString,
-                'timeout' => 30
+                'timeout' => 30,
+                'ignore_errors' => true  // ← CLAVE: Permite obtener respuesta incluso con error HTTP
             ),
             'ssl' => array(
                 'verify_peer' => false,
@@ -101,52 +102,55 @@ class AutentificaTicAPI {
         
         $context = stream_context_create($options);
         
-        try {
-            // Realizar petición
-            $response = @file_get_contents($url, false, $context);
-            
-            // Obtener código HTTP desde $http_response_header
-            $httpCode = 200;
-            if (isset($http_response_header) && is_array($http_response_header)) {
-                foreach ($http_response_header as $header) {
-                    if (preg_match('/HTTP\/\d\.\d\s+(\d+)/', $header, $matches)) {
-                        $httpCode = intval($matches[1]);
-                        break;
-                    }
+        // Realizar petición
+        $response = @file_get_contents($url, false, $context);
+        
+        // Obtener código HTTP desde $http_response_header
+        $httpCode = 500; // Default a error si no se puede determinar
+        if (isset($http_response_header) && is_array($http_response_header)) {
+            foreach ($http_response_header as $header) {
+                if (preg_match('/HTTP\/\d\.\d\s+(\d+)/', $header, $matches)) {
+                    $httpCode = intval($matches[1]);
+                    break;
                 }
             }
+        }
+        
+        $result['http_code'] = $httpCode;
+        
+        // Manejar respuesta vacía o FALSE
+        if ($response === false || empty($response)) {
+            $result['message'] = 'No se recibió respuesta de AutentificaTIC API';
+            $result['http_code'] = $httpCode > 0 ? $httpCode : 503;
+            return $result;
+        }
+        
+        // Parsear respuesta JSON
+        $responseData = json_decode($response, true);
+        
+        // Verificar si fue exitoso
+        if ($httpCode >= 200 && $httpCode < 300) {
+            $result['success'] = true;
+            $result['message'] = isset($responseData['message']) ? $responseData['message'] : 'Operación exitosa';
+            $result['data'] = $responseData;
+        } else {
+            // Error desde la API
+            $errorMessage = 'Error en la petición';
             
-            $result['http_code'] = $httpCode;
-            
-            // Parsear respuesta JSON
-            $responseData = json_decode($response, true);
-            
-            // Verificar si fue exitoso
-            if ($httpCode >= 200 && $httpCode < 300) {
-                $result['success'] = true;
-                $result['message'] = isset($responseData['message']) ? $responseData['message'] : 'Operación exitosa';
-                $result['data'] = $responseData;
-            } else {
-                // Error desde la API
-                $errorMessage = 'Error en la petición';
-                
-                if (isset($responseData['errors'])) {
-                    if (is_array($responseData['errors'])) {
-                        $errorMessage = implode(', ', $responseData['errors']);
-                    } else {
-                        $errorMessage = $responseData['errors'];
-                    }
-                } elseif (isset($responseData['error'])) {
-                    $errorMessage = $responseData['error'];
+            if (isset($responseData['errors'])) {
+                if (is_array($responseData['errors'])) {
+                    $errorMessage = implode(', ', $responseData['errors']);
+                } else {
+                    $errorMessage = $responseData['errors'];
                 }
-                
-                $result['message'] = $errorMessage;
-                $result['data'] = $responseData;
+            } elseif (isset($responseData['error'])) {
+                $errorMessage = $responseData['error'];
+            } elseif (isset($responseData['message'])) {
+                $errorMessage = $responseData['message'];
             }
             
-        } catch (Exception $e) {
-            $result['message'] = 'Error de conexión con AutentificaTIC API: ' . $e->getMessage();
-            $result['http_code'] = 503;
+            $result['message'] = $errorMessage;
+            $result['data'] = $responseData;
         }
         
         return $result;

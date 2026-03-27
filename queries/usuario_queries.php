@@ -113,8 +113,7 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
         
         // Si tenemos el RUT, intentar registrar en AutentificaTIC
         if (!empty($rut)) {
-            // Obtener token de sesión del usuario creador
-            session_start();
+            // El token ya está disponible en $_SESSION (sesión iniciada en el endpoint)
             $accessToken = isset($_SESSION['access_token']) ? $_SESSION['access_token'] : null;
             
             if ($accessToken) {
@@ -140,6 +139,14 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
                         'api_error' => $resultApi['message']
                     );
                 }
+            } else {
+                // No hay token de acceso - rollback
+                mysql_query("ROLLBACK", $link);
+                return array(
+                    'success' => false,
+                    'message' => 'No se pudo obtener el token de autenticación. Por favor inicie sesión nuevamente.',
+                    'code' => 500
+                );
             }
         }
         
@@ -352,8 +359,7 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
     // ========================================
     // El RUT ya fue obtenido arriba
     
-    // Obtener token de sesión del usuario creador
-    session_start();
+    // El token ya está disponible en $_SESSION (sesión iniciada en el endpoint)
     $accessToken = isset($_SESSION['access_token']) ? $_SESSION['access_token'] : null;
     
     if ($accessToken && !empty($rut)) {
@@ -379,6 +385,14 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
                 'api_error' => $resultApi['message']
             );
         }
+    } elseif (!empty($rut) && !$accessToken) {
+        // No hay token de acceso - rollback
+        mysql_query("ROLLBACK", $link);
+        return array(
+            'success' => false,
+            'message' => 'No se pudo obtener el token de autenticación. Por favor inicie sesión nuevamente.',
+            'code' => 500
+        );
     }
     
     // Confirmar transacción
