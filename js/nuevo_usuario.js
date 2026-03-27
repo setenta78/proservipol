@@ -1,5 +1,6 @@
 // Variables globales para acceder a los elementos del formulario
 let textCodFuncionarioBusqueda, codigo, rut, nombres, apellidos, grado, unidad, cargo, fechaCargo, unidadAgregado, curso;
+let tieneCursoAprobado = true; // Bandera global para controlar el estado del curso
 
 // Inicializar variables cuando el DOM esté listo
 document.addEventListener('DOMContentLoaded', function() {
@@ -36,15 +37,22 @@ async function cargarUsuario() {
     
     let funcionarioPersonal = await buscarFuncionarioPersonal();
     
+    // Validación básica de respuesta
+    if (!funcionarioPersonal) {
+        alert("❌ Error de comunicación con el servidor de personal.");
+        textCodFuncionarioBusqueda.value = "";
+        return;
+    }
+
     // === CASO 1: Usuario ya registrado y activo ===
-    if (funcionarioPersonal && funcionarioPersonal.yaRegistrado === true) {
+    if (funcionarioPersonal.yaRegistrado === true) {
         alert("ℹ️ " + funcionarioPersonal.message);
         textCodFuncionarioBusqueda.value = "";
         return;
     }
     
     // === CASO 2: Usuario existe pero está INACTIVO ===
-    if (funcionarioPersonal && funcionarioPersonal.usuarioInactivo === true) {
+    if (funcionarioPersonal.usuarioInactivo === true) {
         const confirmar = confirm(
             "⚠️ " + funcionarioPersonal.message + "\n\n" +
             "Datos del usuario:\n" +
@@ -59,9 +67,8 @@ async function cargarUsuario() {
         );
         
         if (confirmar) {
-            // Cargar datos en el formulario para reactivación
+            tieneCursoAprobado = true; 
             asignarValores(funcionarioPersonal);
-            alert("✅ Complete los datos y presione 'Crear Usuario' para reactivar");
         } else {
             textCodFuncionarioBusqueda.value = "";
         }
@@ -69,13 +76,36 @@ async function cargarUsuario() {
     }
     
     // === CASO 3: Funcionario encontrado en PERSONAL (nuevo usuario) ===
-    if (funcionarioPersonal && funcionarioPersonal.success === true && funcionarioPersonal.data) {
+    if (funcionarioPersonal.success === true && funcionarioPersonal.data) {
         console.log("✅ Funcionario encontrado:", funcionarioPersonal);
+        
+        // Verificar estado del curso ANTES de asignar valores
+        let cursoInfo = funcionarioPersonal.curso || { tieneCurso: false, mensaje: "Sin información" };
+        
+        if (!cursoInfo.tieneCurso) {
+            // CORRECCIÓN 1: Mensaje limpio sin repetición
+            let continuar = confirm(
+                "⚠️ ADVERTENCIA: EL USUARIO NO TIENE EL CURSO PROSERVIPOL APROBADO.\n\n" +
+                "¿Desea continuar con el registro de todos modos?"
+            );
+            
+            if (!continuar) {
+                // CORRECCIÓN 2: Si cancela, limpiar todo y CERRAR el modal
+                borrarValores();
+                cerrarModalNuevo();
+                return; 
+            }
+            // Si continúa, establecemos la bandera en falso pero permitimos el flujo
+            tieneCursoAprobado = false;
+        } else {
+            tieneCursoAprobado = true;
+        }
+
         asignarValores(funcionarioPersonal);
         return;
     }
     
-    // === CASO 4: Error genérico ===
+    // === CASO 4: Error genérico o no encontrado ===
     alert("❌ Código de Funcionario no encontrado en BD Personal, verifique y reintente");
     textCodFuncionarioBusqueda.value = "";
 }
@@ -191,7 +221,7 @@ async function fetchAPI(url) {
             return null;
         }
 
-        // La lógica clave: si el status es 200, asumimos éxito
+        // La lógica clave: si el status es 200, asumimos éxito en la consulta
         if (response.status === 200) {
             return data;
         }
@@ -199,7 +229,7 @@ async function fetchAPI(url) {
         // Para otros códigos de estado (404, 500, etc.)
         if (response.status === 404) {
             console.warn("⚠️ Funcionario no encontrado (404)");
-            return data; // Retornar el mensaje de error
+            return data; 
         }
         
         console.warn("⚠️ Código de estado no esperado:", response.status);
@@ -229,6 +259,9 @@ function borrarValores() {
     if (unidadAgregado) unidadAgregado.value = "";
     if (curso) curso.value = "";
     
+    // Resetear bandera de curso
+    tieneCursoAprobado = true;
+    
     const perfil = document.getElementById("perfil");
     if (perfil) perfil.selectedIndex = 0;
     
@@ -249,7 +282,6 @@ function asignarValores(valores) {
         inicializarVariables();
     }
     
-	
     if (!valores || !valores.data) {
         alert("⚠️ No llegaron datos del funcionario");
         return;
@@ -268,29 +300,45 @@ function asignarValores(valores) {
     fechaCargo.value = "-";
     unidadAgregado.value = data.departamento || "-";
     
-    // Asignar información del curso
+    // Asignar información del curso con estilo visual
     if (valores.curso) {
         if (valores.curso.tieneCurso === true) {
-            curso.value = "APROBADO - " + valores.curso.fechaAprobacion;
+            curso.value = "APROBADO - " + (valores.curso.fechaAprobacion || "");
             curso.style.color = "green";
             curso.style.fontWeight = "bold";
         } else {
             curso.value = valores.curso.mensaje || "Sin Curso";
             curso.style.color = "red";
+            curso.style.fontWeight = "bold";
         }
     } else {
         curso.value = "Sin información de curso";
     }
     
-    console.log("✅ Valores asignados correctamente");
+    console.log("✅ Valores asignados correctamente. ¿Tiene curso?:", tieneCursoAprobado);
 }
 
-// Función auxiliar para cerrar el modal (debe existir en tu código)
+// Función auxiliar para cerrar el modal
 function cerrarModalNuevo() {
-    // Implementar según tu modal
+    // Opción 1: Modal por ID directo (estilo antiguo)
     const modal = document.getElementById("modalNuevoUsuario");
     if (modal) {
         modal.style.display = "none";
     }
+    
+    // Opción 2: Modal con clases Tailwind (estilo nuevo en gestor_usuarios.php)
+    const modalGenerico = document.getElementById("modalNuevo");
+    if (modalGenerico) {
+        modalGenerico.classList.add("hidden");
+        modalGenerico.classList.remove("flex");
+        
+        // Resetear opacidad y escala para la próxima apertura
+        const contenido = document.getElementById("modalContenidoNuevo");
+        if (contenido) {
+            contenido.classList.remove("scale-100", "opacity-100");
+            contenido.classList.add("scale-95", "opacity-0");
+        }
+    }
+
     borrarValores();
-} 
+}

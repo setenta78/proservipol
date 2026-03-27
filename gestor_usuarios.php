@@ -151,27 +151,27 @@ require_once "queries/config.php";
                             echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['FUN_APELLIDOPATERNO'], ENT_QUOTES, 'UTF-8') . "</td>";
                             echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['FUN_APELLIDOMATERNO'], ENT_QUOTES, 'UTF-8') . "</td>";
                             echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['GRA_DESCRIPCION']) . "</td>";
-                            echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['CARGO']) . "</td>";
-                            echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['UNI_DESCRIPCION']) . "</td>";
-                            echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['TUS_DESCRIPCION']) . "</td>";
-                            echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['CAPACITACION']) . "</td>";
-                            echo "<td class='border px-4 py-2'>
-                                    <div class='flex items-center gap-2'>
-                                        <button
-                                            onclick='abrirModal("{$row['FUN_CODIGO']}")'
-                                            class='text-blue-600 hover:text-blue-800'
-                                            title='Editar'>
-                                            <i class='fas fa-edit fa-lg'></i>
-                                        </button>
-                                        <button type='button' onclick='confirmarEliminarAjax("{$row['FUN_CODIGO']}")' class='text-red-600 hover:text-red-800' title='Eliminar'>
-                                            <i class='fas fa-trash-alt fa-lg'></i>
-                                        </button>
-                                    </div>
-                                  </td>";
-                            echo "</tr>";
-                            $i++;
-                        }
-
+							echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['CARGO']) . "</td>";
+							echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['UNI_DESCRIPCION']) . "</td>";
+							echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['TUS_DESCRIPCION']) . "</td>";
+							echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['CAPACITACION']) . "</td>";
+							echo "<td class='border px-4 py-2'>
+	                                    <div class='flex items-center gap-2'>
+	                                        <button
+	                                            onclick=\"abrirModal('{$row['FUN_CODIGO']}')\"
+	                                            class='text-blue-600 hover:text-blue-800'
+	                                            title='Editar'>
+	                                            <i class='fas fa-edit fa-lg'></i>
+	                                        </button>
+	                                        <button type='button' onclick=\"confirmarEliminarAjax('{$row['FUN_CODIGO']}')\" class='text-red-600 hover:text-red-800' title='Eliminar'>
+	                                            <i class='fas fa-trash-alt fa-lg'></i>
+	                                        </button>
+	                                    </div>
+	                                  </td>";
+	                            echo "</tr>";
+	                            $i++;
+	                        }                        
+						
                         echo "</tbody></table></div>";
 
                         // Paginacion

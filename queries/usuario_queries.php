@@ -29,11 +29,11 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
     
     // ========================================
     // PASO 1: Verificar si el usuario ya existe
+    // CORRECCIÓN: Se cambió u.US_CODIGO por u.FUN_CODIGO
     // ========================================
     $sqlCheck = "SELECT 
-        u.US_CODIGO,
-        u.US_ACTIVO,
         u.FUN_CODIGO,
+        u.US_ACTIVO,
         f.FUN_NOMBRE,
         f.FUN_APELLIDOPATERNO,
         f.FUN_APELLIDOMATERNO
@@ -74,14 +74,14 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
         // ========================================
         mysql_query("START TRANSACTION", $link);
         
-        // Encriptar contraseña (usar el método que use tu sistema)
+        // Encriptar contraseña
         $passwordHash = md5($password);
         
         $sqlReactivar = "UPDATE USUARIO 
             SET US_ACTIVO = 1,
                 UNI_CODIGO = $codigoUnidad,
                 TUS_CODIGO = $tipoUsuario,
-                US_CLAVE = '$passwordHash',
+                US_PASSWORD = '$passwordHash',
                 US_FECHAMODIFICACION = NOW()
             WHERE US_LOGIN = '$codFuncionario'";
         
@@ -114,7 +114,7 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
         // Si tenemos el RUT, intentar registrar en AutentificaTIC
         if (!empty($rut)) {
             // Obtener token de sesión del usuario creador
-            session_start();
+            if (!isset($_SESSION)) session_start();
             $accessToken = isset($_SESSION['access_token']) ? $_SESSION['access_token'] : null;
             
             if ($accessToken) {
@@ -295,6 +295,7 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
         $resultInsertFuncionario = mysql_query($sqlInsertFuncionario, $link);
         
         if (!$resultInsertFuncionario) {
+            mysql_query("ROLLBACK", $link);
             return array(
                 'success' => false,
                 'message' => 'Error al insertar funcionario: ' . mysql_error($link),
@@ -306,7 +307,7 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
     // ========================================
     // PASO 4: Insertar en tabla USUARIO (dentro de transacción)
     // ========================================
-    // Encriptar contraseña (usar el método que use tu sistema)
+    // Encriptar contraseña
     $passwordHash = md5($password);
     
     // Obtener RUT del funcionario
@@ -353,7 +354,7 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
     // El RUT ya fue obtenido arriba
     
     // Obtener token de sesión del usuario creador
-    session_start();
+    if (!isset($_SESSION)) session_start();
     $accessToken = isset($_SESSION['access_token']) ? $_SESSION['access_token'] : null;
     
     if ($accessToken && !empty($rut)) {
@@ -393,20 +394,14 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
         'code' => 201,
         'data' => array(
             'codFuncionario' => $codFuncionario,
-            'nombre' => trim($nombre1 . ' ' . $nombre2),
-            'apellidos' => trim($apellidoP . ' ' . $apellidoM)
+            'nombre' => trim($funcionario['PEFBNOM1'] . ' ' . $funcionario['PEFBNOM2']),
+            'apellidos' => trim($funcionario['PEFBAPEP'] . ' ' . $funcionario['PEFBAPEM'])
         )
     );
 }
 
 /**
  * Registra una acción en la tabla de auditoría
- * 
- * @param resource $link Conexión a la base de datos
- * @param string $usuario Usuario que realiza la acción
- * @param string $accion Tipo de acción
- * @param string $descripcion Descripción de la acción
- * @return bool Resultado de la operación
  */
 function registrarAuditoria($link, $usuario, $accion, $descripcion)
 {
@@ -414,11 +409,9 @@ function registrarAuditoria($link, $usuario, $accion, $descripcion)
     $accion = mysql_real_escape_string($accion, $link);
     $descripcion = mysql_real_escape_string($descripcion, $link);
     
-    // Verificar si existe la tabla de auditoría
     $checkTable = mysql_query("SHOW TABLES LIKE 'AUDITORIA'", $link);
     
     if (mysql_num_rows($checkTable) == 0) {
-        // Si no existe la tabla, no hacer nada (evitar errores)
         return true;
     }
     
@@ -437,15 +430,12 @@ function registrarAuditoria($link, $usuario, $accion, $descripcion)
     )";
     
     $result = mysql_query($sqlAuditoria, $link);
-    
     return ($result !== false);
 }
 
 /**
  * Obtiene los datos de un usuario por su código de funcionario
- * 
- * @param string $codFuncionario Código del funcionario
- * @return array|null Datos del usuario o null si no existe
+ * CORRECCIÓN: Se eliminó u.US_CODIGO
  */
 function obtenerUsuarioPorCodigo($codFuncionario)
 {
@@ -454,7 +444,6 @@ function obtenerUsuarioPorCodigo($codFuncionario)
     $codFuncionario = mysql_real_escape_string($codFuncionario, $link);
     
     $sql = "SELECT 
-        u.US_CODIGO,
         u.FUN_CODIGO,
         u.UNI_CODIGO,
         u.US_LOGIN,
@@ -489,10 +478,7 @@ function obtenerUsuarioPorCodigo($codFuncionario)
 
 /**
  * Actualiza la contraseña de un usuario
- * 
- * @param string $codFuncionario Código del funcionario
- * @param string $nuevaPassword Nueva contraseña
- * @return array Resultado de la operación
+ * CORRECCIÓN: Se cambió US_CLAVE por US_PASSWORD
  */
 function actualizarPasswordUsuario($codFuncionario, $nuevaPassword)
 {
@@ -502,7 +488,7 @@ function actualizarPasswordUsuario($codFuncionario, $nuevaPassword)
     $passwordHash = md5($nuevaPassword);
     
     $sql = "UPDATE USUARIO 
-        SET US_CLAVE = '$passwordHash',
+        SET US_PASSWORD = '$passwordHash',
             US_FECHAMODIFICACION = NOW()
         WHERE US_LOGIN = '$codFuncionario'";
     
@@ -523,10 +509,6 @@ function actualizarPasswordUsuario($codFuncionario, $nuevaPassword)
 
 /**
  * Desactiva un usuario (soft delete)
- * 
- * @param string $codFuncionario Código del funcionario
- * @param string $usuarioModificador Usuario que realiza la modificación
- * @return array Resultado de la operación
  */
 function desactivarUsuario($codFuncionario, $usuarioModificador)
 {
@@ -548,7 +530,6 @@ function desactivarUsuario($codFuncionario, $usuarioModificador)
         );
     }
     
-    // Registrar en auditoría
     registrarAuditoria($link, $usuarioModificador, 'DESACTIVAR_USUARIO', 
         'Usuario ' . $codFuncionario . ' desactivado');
     
