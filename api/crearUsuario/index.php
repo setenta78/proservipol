@@ -5,7 +5,7 @@ session_start();
 // COMPATIBILIDAD PHP 5.1.2: json_encode/decode
 // ============================================
 if (!function_exists('json_decode')) {
-    require_once('../../inc/Services_JSON.php'); // ← RUTA CORRECTA
+    require_once('../../inc/Services_JSON.php');
     function json_decode($content, $assoc = false) {
         if ($assoc) {
             $json = new Services_JSON(SERVICES_JSON_LOOSE_TYPE);
@@ -17,7 +17,7 @@ if (!function_exists('json_decode')) {
 }
 
 if (!function_exists('json_encode')) {
-    require_once('../../inc/Services_JSON.php'); // ← RUTA CORRECTA
+    require_once('../../inc/Services_JSON.php');
     function json_encode($content) {
         $json = new Services_JSON();
         return $json->encode($content);
@@ -41,9 +41,9 @@ if (!isset($_SESSION['USUARIO_CODIGOFUNCIONARIO'])) {
 }
 
 // Incluir configuración y consultas específicas de PROSERVIPOL
-require_once "../../queries/config.php"; // ← RUTA CORRECTA
+require_once "../../queries/config.php";
 global $link;
-require_once "../../queries/usuario_queries.php"; // ← RUTA CORRECTA
+require_once "../../queries/usuario_queries.php";
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -83,6 +83,7 @@ try {
         exit;
     }
 
+    // Ejecutar la función de creación/reactivación
     $resultado = crearUsuarioProservipol(
         $codFuncionario,
         $codigoUnidad,
@@ -91,10 +92,13 @@ try {
         $_SESSION['USUARIO_CODIGOFUNCIONARIO']
     );
 
+    // Establecer código de respuesta HTTP basado en el resultado
     if ($resultado['success']) {
-        http_response_code(201);
+        http_response_code(201); // Created
     } else {
-        http_response_code(400);
+        // Usar el código devuelto por la función si existe, sino 400
+        $code = isset($resultado['code']) ? $resultado['code'] : 400;
+        http_response_code($code);
     }
     
     echo json_encode($resultado);

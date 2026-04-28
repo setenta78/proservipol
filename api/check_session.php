@@ -1,54 +1,79 @@
 <?php
-/**
- * API para verificar el estado de la sesión
- * Retorna JSON indicando si la sesión está activa
- */
-
-// Configuración de headers
-header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-cache, must-revalidate');
-header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
-
-// Iniciar sesión
 session_start();
 
-// Tiempo máximo de inactividad (15 minutos)
-$max_inactivity = 15 * 60; // 15 minutos en segundos
-
-// Verificar si la sesión existe y está activa
-$session_active = false;
-$message = '';
-
-if (isset($_SESSION['USUARIO_CODIGOFUNCIONARIO']) && isset($_SESSION['LAST_ACTIVITY'])) {
-    $inactive_time = time() - $_SESSION['LAST_ACTIVITY'];
-    
-    if ($inactive_time < $max_inactivity) {
-        // Sesión activa - actualizar tiempo de última actividad
-        $_SESSION['LAST_ACTIVITY'] = time();
-        $session_active = true;
-        $message = 'Sesión activa';
-    } else {
-        // Sesión expirada por inactividad
-        $session_active = false;
-        $message = 'Sesión expirada por inactividad';
-        
-        // Destruir sesión
-        session_unset();
-        session_destroy();
+// ============================================
+// COMPATIBILIDAD PHP 5.1.2: json_encode/decode
+// ============================================
+if (!function_exists('json_decode')) {
+    require_once('../../inc/Services_JSON.php');
+    function json_decode($content, $assoc = false) {
+        if ($assoc) {
+            $json = new Services_JSON(SERVICES_JSON_LOOSE_TYPE);
+        } else {
+            $json = new Services_JSON();
+        }
+        return $json->decode($content);
     }
-} else {
-    // No hay sesión activa
-    $session_active = false;
-    $message = 'No hay sesión activa';
 }
 
-// Respuesta JSON
+if (!function_exists('json_encode')) {
+    require_once('../../inc/Services_JSON.php');
+    function json_encode($content) {
+        $json = new Services_JSON();
+        return $json->encode($content);
+    }
+}
+
+// CRÍTICO: Desactivar salida de errores HTML para no romper el JSON
+error_reporting(0);
+ini_set('display_errors', 0);
+
+header('Content-Type: application/json; charset=UTF-8');
+
 $response = array(
-    'active' => $session_active,
-    'message' => $message,
-    'timestamp' => time()
+    'active' => false,
+    'message' => 'Sesión no encontrada'
 );
 
-echo json_encode($response);
-exit;
+try {
+    // Verificar si existe la variable de sesión principal
+    if (isset($_SESSION['USUARIO_CODIGOFUNCIONARIO'])) {
+        
+        // Verificar tiempo de inactividad si está definido
+        $max_inactivity = 15 * 60; // 15 minutos
+        
+        if (isset($_SESSION['LAST_ACTIVITY'])) {
+            $inactive_time = time() - $_SESSION['LAST_ACTIVITY'];
+            
+            if ($inactive_time > $max_inactivity) {
+                // Sesión expirada
+                session_unset();
+                session_destroy();
+                $response['message'] = 'Sesión expirada por inactividad';
+                echo json_encode($response);
+                exit;
+            }
+        }
+        
+        // Actualizar tiempo de actividad
+        $_SESSION['LAST_ACTIVITY'] = time();
+        
+        // Sesión activa
+        $response['active'] = true;
+        $response['message'] = 'Sesión activa';
+        $response['user'] = array(
+            'codigo' => $_SESSION['USUARIO_CODIGOFUNCIONARIO'],
+            'perfil' => isset($_SESSION['USUARIO_CODIGOPERFIL']) ? $_SESSION['USUARIO_CODIGOPERFIL'] : null
+        );
+    } else {
+        $response['message'] = 'No hay sesión iniciada';
+    }
+    
+    echo json_encode($response);
+    
+} catch (Exception $e) {
+    // En caso de excepción, devolver JSON de error
+    $response['message'] = 'Error interno: ' . $e->getMessage();
+    echo json_encode($response);
+}
 ?>

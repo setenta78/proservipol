@@ -21,7 +21,7 @@ if (!$funcionario) {
 
 $perfiles = obtenerPerfiles();
 $unidades = obtenerUnidades();
-$accesos = obtenerUltimosAccesos($codigo);
+$accesos  = obtenerUltimosAccesos($codigo);
 ?>
 
 <div class="w-full bg-white rounded-md p-1 mt-1">
@@ -42,21 +42,21 @@ $accesos = obtenerUltimosAccesos($codigo);
                     <p>Cargo registrado en PROSERVIPOL:</p>
                 </div>
                 <div class="bg-gray-100 p-2 space-y-2 text-xs">
-                    <p><?php echo htmlspecialchars($funcionario['FUN_CODIGO'], ENT_QUOTES, 'UTF-8'); ?></p>
-                    <p><?php echo htmlspecialchars($funcionario['FUN_RUT'], ENT_QUOTES, 'UTF-8'); ?></p>
+                    <p><?php echo htmlspecialchars($funcionario['FUN_CODIGO'],          ENT_QUOTES, 'UTF-8'); ?></p>
+                    <p><?php echo htmlspecialchars($funcionario['FUN_RUT'],             ENT_QUOTES, 'UTF-8'); ?></p>
                     <p><?php echo htmlspecialchars($funcionario['FUN_NOMBRE'] . ' ' . $funcionario['FUN_NOMBRE2'], ENT_QUOTES, 'UTF-8'); ?></p>
                     <p><?php echo htmlspecialchars($funcionario['FUN_APELLIDOPATERNO'] . ' ' . $funcionario['FUN_APELLIDOMATERNO'], ENT_QUOTES, 'UTF-8'); ?></p>
-                    <p><?php echo htmlspecialchars($funcionario['GRA_DESCRIPCION'], ENT_QUOTES, 'UTF-8'); ?></p>
-                    <p><?php echo htmlspecialchars($funcionario['UNI_DESCRIPCION'], ENT_QUOTES, 'UTF-8'); ?></p>
-                    <p><?php echo htmlspecialchars($funcionario['CARGO'], ENT_QUOTES, 'UTF-8'); ?></p>
+                    <p><?php echo htmlspecialchars($funcionario['GRA_DESCRIPCION'],     ENT_QUOTES, 'UTF-8'); ?></p>
+                    <p><?php echo htmlspecialchars($funcionario['UNI_DESCRIPCION'],     ENT_QUOTES, 'UTF-8'); ?></p>
+                    <p><?php echo htmlspecialchars($funcionario['CARGO'],               ENT_QUOTES, 'UTF-8'); ?></p>
                 </div>
             </div>
         </div>
 
         <h2 class="text-xs font-semibold text-green-700 mb-1 text-left">DATOS PERFIL DE ACCESO</h2>
         <form id="form-editar-usuario"
-              data-codigo="<?php echo htmlspecialchars($funcionario['FUN_CODIGO'], ENT_QUOTES, 'UTF-8'); ?>"
-              data-rut="<?php echo htmlspecialchars($funcionario['FUN_RUT'], ENT_QUOTES, 'UTF-8'); ?>">
+              data-codigo="<​?php echo htmlspecialchars($funcionario['FUN_CODIGO'], ENT_QUOTES, 'UTF-8'); ?>"
+              data-rut="<​?php echo htmlspecialchars($funcionario['FUN_RUT'],       ENT_QUOTES, 'UTF-8'); ?>">
             <div class="flex gap-2 border rounded-lg overflow-hidden items-center">
                 <div class="w-1/4 h-full flex flex-col items-center justify-center gap-2 p-2">
                     <button onclick="guardarCambios()" type="button" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 text-sm rounded">
@@ -74,31 +74,33 @@ $accesos = obtenerUltimosAccesos($codigo);
                     </div>
                     <div class="bg-gray-100 p-2 space-y-2 text-xs">
                         <select name="perfil" id="perfil" class="w-full border rounded focus:outline-none focus:ring focus:border-green-500 text-xs">
-                            <?php
-                            foreach ($perfiles as $perfil) {
-                                $selected = ($perfil['TUS_CODIGO'] == $funcionario['TUS_CODIGO']) ? 'selected' : '';
-                                echo '<option value="' . htmlspecialchars($perfil['TUS_CODIGO'], ENT_QUOTES, 'UTF-8') . '" ' . $selected . '>' . htmlspecialchars($perfil['TUS_DESCRIPCION'], ENT_QUOTES, 'UTF-8') . '</option>';
-                            }
-                            ?>
+                            <?php foreach ($perfiles as $perfil): ?>
+                                <option value="<​?php echo htmlspecialchars($perfil['TUS_CODIGO'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    <?php echo ($perfil['TUS_CODIGO'] == $funcionario['TUS_CODIGO']) ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($perfil['TUS_DESCRIPCION'], ENT_QUOTES, 'UTF-8'); ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
 
                         <select name="unidad" id="unidad" class="w-full border rounded focus:outline-none focus:ring focus:border-green-500 text-xs">
-                            <?php
-                            foreach ($unidades as $unidad) {
-                                $selected = ($unidad['UNI_CODIGO'] == $funcionario['UNI_CODIGO']) ? 'selected' : '';
-                                echo '<option value="' . htmlspecialchars($unidad['UNI_CODIGO'], ENT_QUOTES, 'UTF-8') . '" ' . $selected . '>' . htmlspecialchars($unidad['UNI_DESCRIPCION'], ENT_QUOTES, 'UTF-8') . '</option>';
-                            }
-                            ?>
+                            <?php foreach ($unidades as $unidad): ?>
+                                <option value="<​?php echo htmlspecialchars($unidad['UNI_CODIGO'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    <?php echo ($unidad['UNI_CODIGO'] == $funcionario['UNI_CODIGO']) ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($unidad['UNI_DESCRIPCION'], ENT_QUOTES, 'UTF-8'); ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
 
                         <p><?php echo htmlspecialchars($funcionario['US_LOGIN'], ENT_QUOTES, 'UTF-8'); ?></p>
 
-                        <input type="password" id="password" name="password" value="" placeholder="Dejar vacio para no cambiar" class="w-full border rounded focus:outline-none focus:ring focus:border-green-500 text-xs p-1" />
+                        <input type="password" id="password" name="password" value=""
+                            placeholder="Dejar vacio para no cambiar"
+                            class="w-full border rounded focus:outline-none focus:ring focus:border-green-500 text-xs p-1" />
 
                         <p><?php echo htmlspecialchars($funcionario['CAPACITACION'], ENT_QUOTES, 'UTF-8'); ?></p>
 
-                        <input type="hidden" id="codigo" name="codigo" value="<?php echo htmlspecialchars($funcionario['FUN_CODIGO'], ENT_QUOTES, 'UTF-8'); ?>">
-                        <input type="hidden" id="rut" name="rut" value="<?php echo htmlspecialchars($funcionario['FUN_RUT'], ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" id="codigo" name="codigo" value="<​?php echo htmlspecialchars($funcionario['FUN_CODIGO'], ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" id="rut"    name="rut"    value="<​?php echo htmlspecialchars($funcionario['FUN_RUT'],    ENT_QUOTES, 'UTF-8'); ?>">
                     </div>
                 </div>
             </div>
@@ -106,9 +108,10 @@ $accesos = obtenerUltimosAccesos($codigo);
     </div>
 
     <form id="form-eliminar-usuario" class="flex justify-end mt-2">
-        <input type="hidden" name="codigo" value="<?php echo htmlspecialchars($codigo, ENT_QUOTES, 'UTF-8'); ?>">
-        <input type="hidden" name="rut" value="<?php echo htmlspecialchars($funcionario['FUN_RUT'], ENT_QUOTES, 'UTF-8'); ?>">
-        <button onclick="confirmarEliminarAjax('form-eliminar-usuario')" type="button" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 text-sm rounded">
+        <input type="hidden" name="codigo" value="<​?php echo htmlspecialchars($codigo,               ENT_QUOTES, 'UTF-8'); ?>">
+        <input type="hidden" name="rut"    value="<​?php echo htmlspecialchars($funcionario['FUN_RUT'], ENT_QUOTES, 'UTF-8'); ?>">
+        <button onclick="confirmarEliminarAjax('<?php echo htmlspecialchars($codigo, ENT_QUOTES, 'UTF-8'); ?>')"
+            type="button" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 text-sm rounded">
             ELIMINAR USUARIO
         </button>
     </form>
@@ -132,11 +135,11 @@ $accesos = obtenerUltimosAccesos($codigo);
                         <?php foreach ($accesos as $acceso): ?>
                             <tr class="hover:bg-gray-50">
                                 <td class="px-2 py-1"><?php echo htmlspecialchars($acceso['US_FECHAHORA_INICIO'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td class="px-2 py-1"><?php echo htmlspecialchars($acceso['NOMBRE_COMPLETO'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td class="px-2 py-1"><?php echo htmlspecialchars($acceso['GRA_DESCRIPCION'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td class="px-2 py-1"><?php echo htmlspecialchars($acceso['UNI_DESCRIPCION'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td class="px-2 py-1"><?php echo htmlspecialchars($acceso['TUS_DESCRIPCION'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td class="px-2 py-1"><?php echo htmlspecialchars($acceso['US_DIRECCION_IP'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-2 py-1"><?php echo htmlspecialchars($acceso['NOMBRE_COMPLETO'],     ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-2 py-1"><?php echo htmlspecialchars($acceso['GRA_DESCRIPCION'],     ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-2 py-1"><?php echo htmlspecialchars($acceso['UNI_DESCRIPCION'],     ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-2 py-1"><?php echo htmlspecialchars($acceso['TUS_DESCRIPCION'],     ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-2 py-1"><?php echo htmlspecialchars($acceso['US_DIRECCION_IP'],     ENT_QUOTES, 'UTF-8'); ?></td>
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
@@ -153,7 +156,8 @@ $accesos = obtenerUltimosAccesos($codigo);
         <button onclick="cerrarModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded">
             CERRAR
         </button>
-        <button type="button" onclick="cerrarModal(); abrirModalIngresos('<?php echo htmlspecialchars($codigo, ENT_QUOTES, 'UTF-8'); ?>');"
+        <button type="button"
+            onclick="cerrarModal(); abrirModalIngresos('<?php echo htmlspecialchars($codigo, ENT_QUOTES, 'UTF-8'); ?>');"
             class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 text-sm rounded">
             BUSCAR MAS INGRESOS
         </button>
@@ -161,12 +165,15 @@ $accesos = obtenerUltimosAccesos($codigo);
 </div>
 
 <script>
+// ✅ URL base centralizada
+var BASE_URL = 'http://aplicativos.des-proservipol.carabineros.cl';
+
 function guardarCambios() {
-    const codigo = document.getElementById('codigo').value;
-    const rut = document.getElementById('rut').value;
-    const perfil = document.getElementById('perfil').value;
-    const unidad = document.getElementById('unidad').value;
-    const password = document.getElementById('password').value;
+    const codigo    = document.getElementById('codigo').value;
+    const rut       = document.getElementById('rut').value;
+    const perfil    = document.getElementById('perfil').value;
+    const unidad    = document.getElementById('unidad').value;
+    const password  = document.getElementById('password').value;
 
     if (!perfil || !unidad) {
         mostrarMensaje('Perfil y Unidad son obligatorios', 'error');
@@ -174,15 +181,16 @@ function guardarCambios() {
     }
 
     const formData = new FormData();
-    formData.append('codigo', codigo);
-    formData.append('rut', rut);
-    formData.append('perfil', perfil);
-    formData.append('unidad', unidad);
+    formData.append('codigo',   codigo);
+    formData.append('rut',      rut);
+    formData.append('perfil',   perfil);
+    formData.append('unidad',   unidad);
     formData.append('password', password);
 
     mostrarMensaje('Guardando cambios...', 'info');
 
-    fetch('queries/editar_queries.php', {
+    // ✅ FIX: URL absoluta
+    fetch(BASE_URL + '/api/editarUsuario/', {
         method: 'POST',
         body: formData
     })
@@ -205,18 +213,6 @@ function mostrarMensaje(mensaje, tipo) {
     const mensajeDiv = document.getElementById('mensaje-respuesta');
     mensajeDiv.textContent = mensaje;
     mensajeDiv.classList.remove('hidden', 'bg-green-100', 'text-green-700', 'bg-red-100', 'text-red-700', 'bg-blue-100', 'text-blue-700');
-    if (tipo === 'success') mensajeDiv.classList.add('bg-green-100', 'text-green-700');
-    else if (tipo === 'error') mensajeDiv.classList.add('bg-red-100', 'text-red-700');
-    else if (tipo === 'info') mensajeDiv.classList.add('bg-blue-100', 'text-blue-700');
-}
-
-function recargarDatosModal(codigo) {
-    fetch('editar_usuario.php?codigo=' + encodeURIComponent(codigo))
-        .then(res => res.text())
-        .then(html => {
-            const contenedor = document.getElementById('contenidoModal');
-            if (contenedor) contenedor.innerHTML = html;
-        })
-        .catch(err => console.error('Error al recargar modal:', err));
-}
-</script>
+    if (tipo === 'success')      mensajeDiv.classList.add('bg-green-100', 'text-green-700');
+    else if (tipo === 'error')   mensajeDiv.classList.add('bg-red-100',   'text-red-700');
+    else ifProcessing

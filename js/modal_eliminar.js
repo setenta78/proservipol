@@ -4,7 +4,8 @@ function confirmarEliminarAjax(codigo) {
     }
     
     $.ajax({
-        url: 'api/eliminarUsuario/index.php',
+        // ✅ FIX: URL absoluta
+        url: 'http://aplicativos.des-proservipol.carabineros.cl/api/eliminarUsuario/index.php',
         method: 'POST',
         data: { codigo: codigo },
         dataType: 'json',
@@ -14,9 +15,7 @@ function confirmarEliminarAjax(codigo) {
                 location.reload();
             } else {
                 var mensajeError = response.message || 'No se pudo desactivar el usuario.';
-                
-                // Manejar mensajes específicos de error de AutentificaTIC
-                if (mensajeError.indexOf('Autentificatic') !== -1) {
+                if (mensajeError.indexOf('AutentificaTIC') !== -1 || mensajeError.indexOf('Autentificatic') !== -1) {
                     alert('Error de conexión con AutentificaTIC:\n\n' + mensajeError);
                 } else {
                     alert('Error: ' + mensajeError);
@@ -25,21 +24,15 @@ function confirmarEliminarAjax(codigo) {
         },
         error: function (xhr, status, error) {
             console.error('Error en eliminación:', error);
-            
             var mensajeError = 'Error de conexión al eliminar usuario.';
-            
-            // Intentar obtener mensaje del servidor
             if (xhr.responseText) {
                 try {
                     var response = JSON.parse(xhr.responseText);
                     if (response && response.message) {
                         mensajeError = response.message;
                     }
-                } catch (e) {
-                    // No es JSON, usar mensaje por defecto
-                }
+                } catch (e) {}
             }
-            
             alert(mensajeError);
         }
     });

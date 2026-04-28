@@ -23,8 +23,9 @@ function eliminarUsuario($codigo)
 {
     global $link;
     
-    // Validación estricta
-    if ($codigo === '' || !is_numeric($codigo)) {
+    // Validación: solo verificar que no esté vacío (códigos son alfanuméricos ej: 013926H)
+    $codigo = trim($codigo);
+    if (empty($codigo)) {
         return array(
             'success' => false,
             'message' => 'Código de funcionario inválido',
@@ -33,7 +34,7 @@ function eliminarUsuario($codigo)
     }
     
     // Escapar datos
-    $codigo = mysql_real_escape_string($codigo, $link);
+    $codigo = mysql_real_escape_string(trim($codigo), $link);
     
     // ========================================
     // PASO 1: Verificar que el usuario existe y obtener su RUT
@@ -130,7 +131,6 @@ function eliminarUsuario($codigo)
     }
     
     // Obtener token de sesión del usuario que elimina
-    session_start();
     $accessToken = isset($_SESSION['access_token']) ? $_SESSION['access_token'] : null;
     
     if (!$accessToken) {
@@ -148,28 +148,35 @@ function eliminarUsuario($codigo)
         $resultApi = $api->eliminarUsuario($rut);
         
         if (!$resultApi['success']) {
-            // Rollback: revertir la desactivación en BD
-            mysql_query("ROLLBACK", $link);
+            // Si el usuario no existe en Autentificatic (404), igual confirmar en BD
+            $http_code = isset($resultApi['http_code']) ? $resultApi['http_code'] : 0;
             
-            // Mensaje específico según el error de la API
-            $mensajeError = 'En este momento existe un problema de conexión con Autentificatic. Por favor intente nuevamente.';
-            
-            // Analizar el error específico
-            if (isset($resultApi['http_code'])) {
-                if ($resultApi['http_code'] == 404) {
-                    $mensajeError = 'El usuario no se encuentra registrado en Autentificatic.';
-                } elseif ($resultApi['http_code'] == 401 || $resultApi['http_code'] == 403) {
-                    $mensajeError = 'Error de autenticación con Autentificatic. Por favor inicie sesión nuevamente.';
-                } elseif ($resultApi['http_code'] >= 500) {
-                    $mensajeError = 'La plataforma Autentificatic presenta problemas temporales. Intente más tarde.';
-                }
+            if ($http_code == 404 || 
+                strpos($resultApi['message'], 'no encontrado') !== false || 
+                strpos($resultApi['message'], 'not found') !== false) {
+                // Usuario no estaba en Autentificatic — confirmar solo en BD
+                mysql_query("COMMIT", $link);
+                registrarAuditoriaEliminar($link, $codigo, $nombreCompleto);
+                return array(
+                    'success' => true,
+                    'message' => 'Usuario eliminado de PROSERVIPOL. (No estaba registrado en AutentificaTIC).',
+                    'code' => 200,
+                    'data' => array(
+                        'codFuncionario' => $codigo,
+                        'nombre' => $nombreCompleto,
+                        'rut' => $rut
+                    )
+                );
             }
             
-            if (strpos($resultApi['message'], 'no encontrado') !== false || 
-                strpos($resultApi['message'], 'not found') !== false) {
-                $mensajeError = 'El usuario no se encuentra registrado en Autentificatic.';
-            } elseif (strpos($resultApi['message'], 'Plataforma') !== false) {
-                $mensajeError = 'La plataforma no se encuentra registrada en Autentificatic.';
+            // Otro error de API — hacer rollback
+            mysql_query("ROLLBACK", $link);
+            
+            $mensajeError = 'En este momento existe un problema de conexión con Autentificatic. Por favor intente nuevamente.';
+            if ($http_code == 401 || $http_code == 403) {
+                $mensajeError = 'Error de autenticación con Autentificatic. Por favor inicie sesión nuevamente.';
+            } elseif ($http_code >= 500) {
+                $mensajeError = 'La plataforma Autentificatic presenta problemas temporales. Intente más tarde.';
             }
             
             return array(
@@ -177,14 +184,12 @@ function eliminarUsuario($codigo)
                 'message' => $mensajeError,
                 'code' => 500,
                 'api_error' => $resultApi['message'],
-                'api_http_code' => $resultApi['http_code']
+                'api_http_code' => $http_code
             );
         }
         
     } catch (Exception $e) {
-        // Rollback en caso de excepción
         mysql_query("ROLLBACK", $link);
-        
         return array(
             'success' => false,
             'message' => 'En este momento existe un problema de conexión con Autentificatic. Por favor intente nuevamente.',
@@ -198,12 +203,8 @@ function eliminarUsuario($codigo)
     // ========================================
     mysql_query("COMMIT", $link);
     
-    // Registrar en auditoría
     registrarAuditoriaEliminar($link, $codigo, $nombreCompleto);
     
-    // ========================================
-    // RESPUESTA EXITOSA
-    // ========================================
     return array(
         'success' => true,
         'message' => 'Usuario eliminado exitosamente. Se ha desactivado en PROSERVIPOL y eliminado de AutentificaTIC.',
@@ -221,7 +222,6 @@ function eliminarUsuario($codigo)
  */
 function registrarAuditoriaEliminar($link, $codigo, $nombre)
 {
-    session_start();
     $usuarioEliminador = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 0;
     
     $codigo = mysql_real_escape_string($codigo, $link);

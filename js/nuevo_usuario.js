@@ -1,27 +1,28 @@
 // Variables globales para acceder a los elementos del formulario
 let textCodFuncionarioBusqueda, codigo, rut, nombres, apellidos, grado, unidad, cargo, fechaCargo, unidadAgregado, curso;
-let tieneCursoAprobado = true; // Bandera global para controlar el estado del curso
+let tieneCursoAprobado = true;
 
-// Inicializar variables cuando el DOM esté listo
+// ✅ URL base centralizada — un solo lugar para cambiar
+var BASE_URL = 'http://aplicativos.des-proservipol.carabineros.cl';
+
 document.addEventListener('DOMContentLoaded', function() {
     inicializarVariables();
 });
 
 function inicializarVariables() {
     textCodFuncionarioBusqueda = document.getElementById("textCodFuncionarioBusqueda");
-    codigo = document.getElementById("codigo");
-    rut = document.getElementById("rut");
-    nombres = document.getElementById("nombres");
-    apellidos = document.getElementById("apellidos");
-    grado = document.getElementById("grado");
-    unidad = document.getElementById("unidad");
-    cargo = document.getElementById("cargo");
-    fechaCargo = document.getElementById("fechaCargo");
+    codigo      = document.getElementById("codigo");
+    rut         = document.getElementById("rut");
+    nombres     = document.getElementById("nombres");
+    apellidos   = document.getElementById("apellidos");
+    grado       = document.getElementById("grado");
+    unidad      = document.getElementById("unidad");
+    cargo       = document.getElementById("cargo");
+    fechaCargo  = document.getElementById("fechaCargo");
     unidadAgregado = document.getElementById("unidadAgregado");
-    curso = document.getElementById("curso");
+    curso       = document.getElementById("curso");
 }
 
-// Función principal: busca funcionario en BD PERSONAL únicamente
 async function cargarUsuario() {
     if (!textCodFuncionarioBusqueda) {
         inicializarVariables();
@@ -37,21 +38,18 @@ async function cargarUsuario() {
     
     let funcionarioPersonal = await buscarFuncionarioPersonal();
     
-    // Validación básica de respuesta
     if (!funcionarioPersonal) {
         alert("❌ Error de comunicación con el servidor de personal.");
         textCodFuncionarioBusqueda.value = "";
         return;
     }
 
-    // === CASO 1: Usuario ya registrado y activo ===
     if (funcionarioPersonal.yaRegistrado === true) {
         alert("ℹ️ " + funcionarioPersonal.message);
         textCodFuncionarioBusqueda.value = "";
         return;
     }
     
-    // === CASO 2: Usuario existe pero está INACTIVO ===
     if (funcionarioPersonal.usuarioInactivo === true) {
         const confirmar = confirm(
             "⚠️ " + funcionarioPersonal.message + "\n\n" +
@@ -75,27 +73,22 @@ async function cargarUsuario() {
         return;
     }
     
-    // === CASO 3: Funcionario encontrado en PERSONAL (nuevo usuario) ===
     if (funcionarioPersonal.success === true && funcionarioPersonal.data) {
         console.log("✅ Funcionario encontrado:", funcionarioPersonal);
         
-        // Verificar estado del curso ANTES de asignar valores
         let cursoInfo = funcionarioPersonal.curso || { tieneCurso: false, mensaje: "Sin información" };
         
         if (!cursoInfo.tieneCurso) {
-            // CORRECCIÓN 1: Mensaje limpio sin repetición
             let continuar = confirm(
                 "⚠️ ADVERTENCIA: EL USUARIO NO TIENE EL CURSO PROSERVIPOL APROBADO.\n\n" +
                 "¿Desea continuar con el registro de todos modos?"
             );
             
             if (!continuar) {
-                // CORRECCIÓN 2: Si cancela, limpiar todo y CERRAR el modal
                 borrarValores();
                 cerrarModalNuevo();
                 return; 
             }
-            // Si continúa, establecemos la bandera en falso pero permitimos el flujo
             tieneCursoAprobado = false;
         } else {
             tieneCursoAprobado = true;
@@ -105,15 +98,15 @@ async function cargarUsuario() {
         return;
     }
     
-    // === CASO 4: Error genérico o no encontrado ===
     alert("❌ Código de Funcionario no encontrado en BD Personal, verifique y reintente");
     textCodFuncionarioBusqueda.value = "";
 }
 
 function buscarFuncionarioPersonal() {
+    // ✅ FIX: usar BASE_URL
     return fetchAPI(
-        "http://aplicativos.des-proservipol.carabineros.cl/api/buscarFuncionarioPersonal/?codFuncionario=" +
-        textCodFuncionarioBusqueda.value
+        BASE_URL + "/api/buscarFuncionarioPersonal/?codFuncionario=" +
+        encodeURIComponent(textCodFuncionarioBusqueda.value)
     );
 }
 
@@ -123,33 +116,32 @@ async function crearUsuario() {
     }
     
     const codFuncionario = codigo.value;
-    const codigoUnidad = document.querySelector("input[name='unidadPerfil']").value;
-    const tipoUsuario = document.getElementById("perfil").value;
-    const password = document.querySelector("input[name='proClave']").value;
+    const codigoUnidad   = document.querySelector("input[name='unidadPerfil']").value;
+    const tipoUsuario    = document.getElementById("perfil").value;
+    const password       = document.querySelector("input[name='proClave']").value;
 
     if (!codFuncionario || !codigoUnidad || !tipoUsuario || !password) {
         alert("⚠️ Todos los campos son obligatorios");
         return;
     }
     
-    // Validar que la contraseña tenga al menos 6 caracteres
     if (password.length < 6) {
         alert("⚠️ La contraseña debe tener al menos 6 caracteres");
         return;
     }
     
-    // Preparar los datos como un objeto JSON
     const datos = {
         codFuncionario: codFuncionario,
-        codigoUnidad: codigoUnidad,
-        tipoUsuario: tipoUsuario,
-        password: password
+        codigoUnidad:   codigoUnidad,
+        tipoUsuario:    tipoUsuario,
+        password:       password
     };
 
     try {
         console.log("📤 Enviando datos:", datos);
         
-        const response = await fetch("http://aplicativos.des-proservipol.carabineros.cl/api/crearUsuario/", {
+        // ✅ FIX: usar BASE_URL
+        const response = await fetch(BASE_URL + "/api/crearUsuario/", {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -169,22 +161,18 @@ async function crearUsuario() {
             return;
         }
         
-        // Manejar respuestas de error
         if (!response.ok || !data.success) {
             let errorMsg = "Error al crear usuario. Revisa los datos.";
-            
             if (data.message) {
                 errorMsg = data.message;
             } else if (data.error) {
                 errorMsg = Object.values(data.error).join("\n");
             }
-            
             console.error("❌ Error al crear usuario:", errorMsg);
             alert("⚠️ " + errorMsg);
             return;
         }
         
-        // Éxito
         console.log("✅ Usuario creado/reactivado:", data);
         
         if (data.message) {
@@ -193,7 +181,6 @@ async function crearUsuario() {
             alert("✅ Usuario procesado correctamente");
         }
         
-        // Cerrar modal y recargar
         cerrarModalNuevo();
         location.reload();
         
@@ -203,7 +190,6 @@ async function crearUsuario() {
     }
 }
 
-// === FUNCIÓN CORREGIDA: fetchAPI ===
 async function fetchAPI(url) {
     try {
         console.log("📡 Llamando API:", url);
@@ -211,7 +197,6 @@ async function fetchAPI(url) {
         const text = await response.text();
         console.log("📥 Respuesta RAW:", text);
         
-        // Intentar parsear el JSON
         let data = null;
         try {
             data = JSON.parse(text);
@@ -221,12 +206,10 @@ async function fetchAPI(url) {
             return null;
         }
 
-        // La lógica clave: si el status es 200, asumimos éxito en la consulta
         if (response.status === 200) {
             return data;
         }
         
-        // Para otros códigos de estado (404, 500, etc.)
         if (response.status === 404) {
             console.warn("⚠️ Funcionario no encontrado (404)");
             return data; 
@@ -248,18 +231,17 @@ function borrarValores() {
     }
     
     if (textCodFuncionarioBusqueda) textCodFuncionarioBusqueda.value = "";
-    if (codigo) codigo.value = "";
-    if (rut) rut.value = "";
-    if (nombres) nombres.value = "";
-    if (apellidos) apellidos.value = "";
-    if (grado) grado.value = "";
-    if (unidad) unidad.value = "";
-    if (cargo) cargo.value = "";
-    if (fechaCargo) fechaCargo.value = "";
+    if (codigo)        codigo.value        = "";
+    if (rut)           rut.value           = "";
+    if (nombres)       nombres.value       = "";
+    if (apellidos)     apellidos.value     = "";
+    if (grado)         grado.value         = "";
+    if (unidad)        unidad.value        = "";
+    if (cargo)         cargo.value         = "";
+    if (fechaCargo)    fechaCargo.value    = "";
     if (unidadAgregado) unidadAgregado.value = "";
-    if (curso) curso.value = "";
+    if (curso)         curso.value         = "";
     
-    // Resetear bandera de curso
     tieneCursoAprobado = true;
     
     const perfil = document.getElementById("perfil");
@@ -273,6 +255,9 @@ function borrarValores() {
     
     const proClave = document.querySelector("input[name='proClave']");
     if (proClave) proClave.value = "";
+
+    const proUsuario = document.querySelector("input[name='proUsuario']");
+    if (proUsuario) proUsuario.value = "";
 }
 
 function asignarValores(valores) {
@@ -289,26 +274,29 @@ function asignarValores(valores) {
     
     const data = valores.data;
     
-    // Asignar valores directamente desde el objeto
-    codigo.value = data.codigo || textCodFuncionarioBusqueda.value || "";
-    rut.value = data.rut || "";
-    nombres.value = data.nombre || "";
-    apellidos.value = ((data.apellidoPaterno || "") + " " + (data.apellidoMaterno || "")).trim();
-    grado.value = data.grado || "";
-    unidad.value = data.unidad || "";
-    cargo.value = "Por definir";
-    fechaCargo.value = "-";
+    codigo.value      = data.codigo || textCodFuncionarioBusqueda.value || "";
+    rut.value         = data.rut    || "";
+    nombres.value     = data.nombre || "";
+    apellidos.value   = ((data.apellidoPaterno || "") + " " + (data.apellidoMaterno || "")).trim();
+    grado.value       = data.grado  || "";
+    unidad.value      = data.unidad || "";
+    cargo.value       = "Por definir";
+    fechaCargo.value  = "-";
     unidadAgregado.value = data.departamento || "-";
     
-    // Asignar información del curso con estilo visual
+    const proUsuario = document.querySelector("input[name='proUsuario']");
+    if (proUsuario) {
+        proUsuario.value = data.codigo || textCodFuncionarioBusqueda.value || "";
+    }
+
     if (valores.curso) {
         if (valores.curso.tieneCurso === true) {
             curso.value = "APROBADO - " + (valores.curso.fechaAprobacion || "");
-            curso.style.color = "green";
+            curso.style.color      = "green";
             curso.style.fontWeight = "bold";
         } else {
             curso.value = valores.curso.mensaje || "Sin Curso";
-            curso.style.color = "red";
+            curso.style.color      = "red";
             curso.style.fontWeight = "bold";
         }
     } else {
@@ -318,21 +306,17 @@ function asignarValores(valores) {
     console.log("✅ Valores asignados correctamente. ¿Tiene curso?:", tieneCursoAprobado);
 }
 
-// Función auxiliar para cerrar el modal
 function cerrarModalNuevo() {
-    // Opción 1: Modal por ID directo (estilo antiguo)
     const modal = document.getElementById("modalNuevoUsuario");
     if (modal) {
         modal.style.display = "none";
     }
     
-    // Opción 2: Modal con clases Tailwind (estilo nuevo en gestor_usuarios.php)
     const modalGenerico = document.getElementById("modalNuevo");
     if (modalGenerico) {
         modalGenerico.classList.add("hidden");
         modalGenerico.classList.remove("flex");
         
-        // Resetear opacidad y escala para la próxima apertura
         const contenido = document.getElementById("modalContenidoNuevo");
         if (contenido) {
             contenido.classList.remove("scale-100", "opacity-100");
