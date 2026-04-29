@@ -130,10 +130,8 @@ function actualizarUsuario($codigo, $perfil, $unidad, $password, $usuarioModific
     $descripcion = "Edición de usuario $codigo. Perfil: $perfil, Unidad: $unidad." . (!empty($password) ? " Cambio de clave." : "");
     // Aquí podrías insertar en BITACORA_AUDITORIA si existe
     
-    if (mysql_affected_rows($link) > 0) {
-        return array('success' => true, 'message' => 'Datos actualizados correctamente.', 'code' => 200);
-    } else {
-        return array('success' => true, 'message' => 'No se realizaron cambios (datos iguales).', 'code' => 200);
-    }
+    // Se considera exitoso si no hubo errores en la transacción
+    // No importa si los datos eran iguales, el usuario confirmó la acción
+    return array('success' => true, 'message' => 'Datos procesados correctamente.', 'code' => 200);
 }
 ?>

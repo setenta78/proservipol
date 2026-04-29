@@ -2,24 +2,34 @@
 function rules($data)
 {
     $message = array();
+    
     // Validar ID Usuario (obligatorio para editar)
     if (!isset($data['idUsuario']) || empty($data['idUsuario'])) {
         $message["idUsuario"] = "El ID de Usuario es obligatorio";
     }
-    // Validar Email
-    if (!isset($data['email']) || empty(trim($data['email']))) {
-        $message["email"] = "El Email es obligatorio";
-    } elseif (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
-        $message["email"] = "El Email no tiene un formato válido";
+    
+    // Validar Código de Funcionario
+    if (!isset($data['codFuncionario']) || empty($data['codFuncionario'])) {
+        $message["codFuncionario"] = "El Código de Funcionario es obligatorio";
     }
+    
     // Validar Perfil
     if (!isset($data['idPerfil']) || empty($data['idPerfil'])) {
         $message["idPerfil"] = "El Perfil es obligatorio";
     }
-    // Validar Estado
-    if (!isset($data['estado'])) {
-        $message["estado"] = "El Estado es obligatorio";
+    
+    // Validar Unidad
+    if (!isset($data['uniCodigo'])) {
+        $message["uniCodigo"] = "La Unidad es obligatoria";
     }
+    
+    // Validar password (opcional, solo formato si se proporciona)
+    if (isset($data['password']) && !empty($data['password'])) {
+        if (strlen($data['password']) < 6) {
+            $message["password"] = "La contraseña debe tener al menos 6 caracteres";
+        }
+    }
+    
     // Si hay errores, retornar código 412
     if (count($message) > 0) {
         return array(
@@ -28,12 +38,14 @@ function rules($data)
             "code" => "412"
         );
     }
+    
     // Si todo está correcto, retornar los datos validados y sanitizados
     return array(
         "idUsuario" => intval($data['idUsuario']),
-        "email" => strtolower(trim($data['email'])),
+        "codFuncionario" => mysql_real_escape_string($data['codFuncionario']),
         "idPerfil" => intval($data['idPerfil']),
-        "estado" => intval($data['estado']),
+        "uniCodigo" => intval($data['uniCodigo']),
+        "password" => isset($data['password']) ? $data['password'] : '',
         "code" => "200"
     );
 }

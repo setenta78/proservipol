@@ -1,5 +1,6 @@
 <?php
 session_start();
+
 // Incluir tools.php PRIMERO (compatible con PHP 5.1.2)
 include_once("../tools.php");
 
@@ -68,7 +69,7 @@ try {
     $params['usuarioModificacion'] = $_SESSION['user_id'];
     
     $objDBUsuario = new dbUsuario();
-    $resultado = $objDBUsuario->editarUsuario($params);
+    $resultado = $objDBUsuario->modificarUsuarioTransaccional($params);
     
     if ($resultado['success']) {
         http_response_code(200);

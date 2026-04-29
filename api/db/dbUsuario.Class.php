@@ -1,6 +1,7 @@
 <?php
 include_once("../../inc/config.inc.php");
 include_once("conexion.Class.php");
+
 class dbUsuario extends Conexion
 {
     /**
@@ -31,7 +32,7 @@ class dbUsuario extends Conexion
                 WHERE u.rut = '{$rut}'
                 AND u.fecha_eliminacion IS NULL";
         $result = $this->execute($conn, $sql);
-        // Leer datos ANTES de cerrar conexión
+        
         $usuario = null;
         if ($myrow = mysql_fetch_array($result)) {
             $usuario = array(
@@ -53,10 +54,12 @@ class dbUsuario extends Conexion
             );
         }
         $this->desconect();
+        
         return $usuario ? 
             array("success" => true, "data" => $usuario) : 
             array("success" => false, "data" => false, "message" => "Usuario no encontrado");
     }
+
     /**
      * Busca un usuario por código de funcionario
      */
@@ -85,7 +88,7 @@ class dbUsuario extends Conexion
                 WHERE u.cod_funcionario = '{$codFuncionario}'
                 AND u.fecha_eliminacion IS NULL";
         $result = $this->execute($conn, $sql);
-        // Leer datos ANTES de cerrar conexión
+        
         $usuario = null;
         if ($myrow = mysql_fetch_array($result)) {
             $usuario = array(
@@ -107,17 +110,19 @@ class dbUsuario extends Conexion
             );
         }
         $this->desconect();
+        
         return $usuario ? 
             array("success" => true, "data" => $usuario) : 
             array("success" => false, "data" => false, "message" => "Usuario no encontrado");
     }
+
     /**
      * Crea un nuevo usuario
      */
     function crearUsuario($params)
     {
         $conn = $this->conect();
-        // Escapar datos
+        
         $rut = mysql_real_escape_string($params['rut'], $conn);
         $codFuncionario = mysql_real_escape_string($params['codFuncionario'], $conn);
         $primerNombre = mysql_real_escape_string($params['primerNombre'], $conn);
@@ -129,7 +134,6 @@ class dbUsuario extends Conexion
         $estado = intval($params['estado']);
         $usuarioCreacion = intval($params['usuarioCreacion']);
         
-        // Verificar si el usuario ya existe
         $sqlCheck = "SELECT id_usuario FROM usuarios 
                      WHERE (rut = '{$rut}' OR cod_funcionario = '{$codFuncionario}' OR email = '{$email}')
                      AND fecha_eliminacion IS NULL";
@@ -142,7 +146,7 @@ class dbUsuario extends Conexion
                 "message" => "Ya existe un usuario con ese RUT, Código de Funcionario o Email"
             );
         }
-        // Insertar nuevo usuario
+        
         $sql = "INSERT INTO usuarios (
                     rut,
                     cod_funcionario,
@@ -168,6 +172,7 @@ class dbUsuario extends Conexion
                     NOW(),
                     {$usuarioCreacion}
                 )";
+        
         $result = $this->execute($conn, $sql);
         if ($result) {
             $idUsuario = mysql_insert_id($conn);
@@ -180,26 +185,26 @@ class dbUsuario extends Conexion
         } else {
             $error = mysql_error($conn);
             $this->desconect();
-            
             return array(
                 "success" => false,
                 "message" => "Error al crear usuario: " . $error
             );
         }
     }
-     /**
+
+    /**
      * Edita un usuario existente
      */
     function editarUsuario($params)
     {
         $conn = $this->conect();
-        // Escapar datos
+        
         $idUsuario = intval($params['idUsuario']);
         $email = mysql_real_escape_string($params['email'], $conn);
         $idPerfil = intval($params['idPerfil']);
         $estado = intval($params['estado']);
         $usuarioModificacion = intval($params['usuarioModificacion']);
-        // Verificar si el usuario existe
+        
         $sqlCheck = "SELECT id_usuario FROM usuarios 
                      WHERE id_usuario = {$idUsuario}
                      AND fecha_eliminacion IS NULL";
@@ -214,7 +219,6 @@ class dbUsuario extends Conexion
             );
         }
         
-        // Verificar si el email ya está en uso por otro usuario
         $sqlCheckEmail = "SELECT id_usuario FROM usuarios 
                           WHERE email = '{$email}'
                           AND id_usuario != {$idUsuario}
@@ -230,7 +234,6 @@ class dbUsuario extends Conexion
             );
         }
         
-        // Actualizar usuario
         $sql = "UPDATE usuarios SET
                     email = '{$email}',
                     id_perfil = {$idPerfil},
@@ -243,7 +246,6 @@ class dbUsuario extends Conexion
         
         if ($result) {
             $this->desconect();
-            
             return array(
                 "success" => true,
                 "message" => "Usuario actualizado exitosamente"
@@ -251,14 +253,109 @@ class dbUsuario extends Conexion
         } else {
             $error = mysql_error($conn);
             $this->desconect();
-            
             return array(
                 "success" => false,
                 "message" => "Error al actualizar usuario: " . $error
             );
         }
     }
-    
+
+    /**
+     * MODIFICAR USUARIO CON TRANSACCIÓN ATÓMICA + API AUTENTIFICATIC
+     * GACC-0009: Modificar Acceso
+     */
+    function modificarUsuarioTransaccional($params)
+    {
+        $conn = $this->conect();
+        
+        // Iniciar transacción
+        mysql_query("START TRANSACTION", $conn);
+        
+        $idUsuario = intval($params['idUsuario']);
+        $codFuncionario = mysql_real_escape_string($params['codFuncionario'], $conn);
+        $idPerfil = intval($params['idPerfil']);
+        $uniCodigo = intval($params['uniCodigo']);
+        $password = isset($params['password']) ? $params['password'] : '';
+        $usuarioModificacion = intval($params['usuarioModificacion']);
+        
+        // Verificar si el usuario existe
+        $sqlCheck = "SELECT id_usuario, rut FROM usuarios 
+                     WHERE id_usuario = {$idUsuario}
+                     AND fecha_eliminacion IS NULL";
+        
+        $resultCheck = $this->execute($conn, $sqlCheck);
+        
+        if (mysql_num_rows($resultCheck) == 0) {
+            mysql_query("ROLLBACK", $conn);
+            $this->desconect();
+            return array(
+                "success" => false,
+                "message" => "Usuario no encontrado"
+            );
+        }
+        
+        $usuarioData = mysql_fetch_array($resultCheck);
+        $rut = $usuarioData['rut'];
+        
+        // Preparar UPDATE
+        $sql = "UPDATE usuarios SET
+                    id_perfil = {$idPerfil},
+                    uni_codigo = {$uniCodigo},
+                    fecha_modificacion = NOW(),
+                    usuario_modificacion = {$usuarioModificacion}";
+        
+        // Solo actualizar password si se proporciona uno nuevo
+        if (!empty($password)) {
+            $passHash = md5($password);
+            $sql .= ", password = '{$passHash}'";
+        }
+        
+        $sql .= " WHERE id_usuario = {$idUsuario}";
+        
+        $result = $this->execute($conn, $sql);
+        
+        if (!$result) {
+            mysql_query("ROLLBACK", $conn);
+            $error = mysql_error($conn);
+            $this->desconect();
+            return array(
+                "success" => false,
+                "message" => "Error al actualizar usuario en base de datos: " . $error
+            );
+        }
+        
+        // Intentar actualizar en API AutentificaTIC
+        include_once(__DIR__ . "/dbAutentificaTic.Class.php");
+        $dbApi = new dbAutentificaTic();
+        
+        $apiParams = array(
+            "institutionalAppId" => 2,
+            "userRut" => $rut,
+            "profileId" => $idPerfil
+        );
+        
+        $apiResult = $dbApi->actualizarUsuarioEnApi($apiParams);
+        
+        // Si falla la API, hacer rollback
+        if (!$apiResult['success']) {
+            mysql_query("ROLLBACK", $conn);
+            $this->desconect();
+            return array(
+                "success" => false,
+                "message" => "Usuario actualizado en base de datos, pero falló sincronización con API: " . $apiResult['message']
+            );
+        }
+        
+        // Commit exitoso
+        mysql_query("COMMIT", $conn);
+        $this->desconect();
+        
+        return array(
+            "success" => true,
+            "message" => "Usuario modificado exitosamente. Cambios sincronizados con API AutentificaTIC."
+        );
+    }
+
     /**
      * Elimina un usuario (eliminación lógica)
      */
@@ -266,11 +363,9 @@ class dbUsuario extends Conexion
     {
         $conn = $this->conect();
         
-        // Escapar datos
         $idUsuario = intval($params['idUsuario']);
         $usuarioEliminacion = intval($params['usuarioEliminacion']);
         
-        // Verificar si el usuario existe
         $sqlCheck = "SELECT id_usuario FROM usuarios 
                      WHERE id_usuario = {$idUsuario}
                      AND fecha_eliminacion IS NULL";
@@ -285,7 +380,6 @@ class dbUsuario extends Conexion
             );
         }
         
-        // Eliminar usuario (lógicamente)
         $sql = "UPDATE usuarios SET
                     fecha_eliminacion = NOW(),
                     usuario_eliminacion = {$usuarioEliminacion}
@@ -295,7 +389,6 @@ class dbUsuario extends Conexion
         
         if ($result) {
             $this->desconect();
-            
             return array(
                 "success" => true,
                 "message" => "Usuario eliminado exitosamente"
@@ -303,14 +396,13 @@ class dbUsuario extends Conexion
         } else {
             $error = mysql_error($conn);
             $this->desconect();
-            
             return array(
                 "success" => false,
                 "message" => "Error al eliminar usuario: " . $error
             );
         }
     }
-    
+
     /**
      * Lista todos los usuarios activos
      */
@@ -338,7 +430,6 @@ class dbUsuario extends Conexion
         
         $result = $this->execute($conn, $sql);
         
-        // Leer datos ANTES de cerrar conexión
         $usuarios = array();
         
         while ($myrow = mysql_fetch_array($result)) {
