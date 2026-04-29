@@ -1,4 +1,4 @@
-//CARGAMOS EL MODAL CON SUS DATOS
+// CARGAMOS EL MODAL CON SUS DATOS
 function abrirModal(codigo) {
     const modal = document.getElementById("modalEditar");
     const contenido = document.getElementById("modalContenido");
@@ -45,11 +45,18 @@ function guardarCambios() {
     const codigo = document.getElementById("codigo")?.value || "";
     const perfil = document.getElementById("perfil")?.value || "";
     const unidad = document.getElementById("unidad")?.value || "";
-    const password = document.getElementById("password")?.value || "";
+    const passwordInput = document.getElementById("password");
+    const password = passwordInput ? passwordInput.value : "";
 
-    // Validar antes de enviar
-    if (!codigo || !perfil || !unidad || !password) {
-        alert("Por favor, complete todos los campos.");
+    // Validar campos obligatorios (Password NO es obligatorio en edición)
+    if (!codigo || !perfil || !unidad) {
+        alert("Por favor, complete el Perfil y la Unidad.");
+        return;
+    }
+
+    // Validar longitud de password si se ingresó uno nuevo
+    if (password && password.length < 6) {
+        alert("La contraseña nueva debe tener al menos 6 caracteres.");
         return;
     }
 
@@ -64,22 +71,33 @@ function guardarCambios() {
         body: datos,
     })
     .then((response) => response.text())
-    .then((respuesta) => {
-        const r = respuesta.trim().toLowerCase();
-        if (r === "ok" || r.includes("actualizados correctamente")) {
-            alert("Cambios guardados correctamente.");
-            recargarDatosModal(codigo);
+    .then((textoRespuesta) => {
+        // Intentar parsear JSON manualmente para compatibilidad PHP 5.1.2 si falla el auto-parse
+        let respuesta;
+        try {
+            // Limpieza básica por si hay espacios en blanco extra
+            textoRespuesta = textoRespuesta.trim();
+            respuesta = JSON.parse(textoRespuesta);
+        } catch (e) {
+            console.error("Error parseando JSON:", e, "Texto recibido:", textoRespuesta);
+            alert("Error en la respuesta del servidor. Revise la consola.");
+            return;
+        }
+
+        if (respuesta.success) {
+            alert("✅ " + respuesta.message);
+            cerrarModal();
         } else {
-            alert("Error: " + respuesta);
+            alert("⚠️ Error: " + respuesta.message);
         }
     })
     .catch((error) => {
-        alert("Ocurrió un error al guardar los cambios.");
+        alert("Ocurrió un error de conexión al guardar los cambios.");
         console.error(error);
     });
 }
 
-//RECARGAMOS EL MODAL CON SUS DATOS
+// RECARGAMOS EL MODAL CON SUS DATOS (Si fuera necesario)
 function recargarDatosModal(codigo) {
     fetch(`editar_usuario.php?codigo=${codigo}`)
         .then((res) => res.text())
@@ -87,8 +105,6 @@ function recargarDatosModal(codigo) {
             const contenedor = document.getElementById("contenidoModal");
             if (contenedor) {
                 contenedor.innerHTML = html;
-            } else {
-                console.warn("No se encontró el contenedor del modal.");
             }
         })
         .catch((err) => console.error("Error al recargar modal:", err));

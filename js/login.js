@@ -1,9 +1,11 @@
 /**
  * SISTEMA DE APLICACIONES DE PROSERVIPOL
  * Lógica de Autenticación con Autentificatic API - Denis Quezada Lemus
- * @version 4.1
+ * @version 4.2
  * @date 2025
- * Mejoras: Validación completa de RUT chileno con dígito verificador K
+ * Mejoras: 
+ * - Validación completa de RUT chileno con dígito verificador K
+ * - SEGURIDAD: Ocultamiento de detalles técnicos en mensajes de error (Códigos de perfil)
  */
 
 // ========== CONFIGURACIÓN ========== 
@@ -28,7 +30,9 @@ var ERROR_MESSAGES = {
     UNAUTHORIZED: 'Usuario inactivo o sin permisos para este sistema.',
     NETWORK_ERROR: 'Error de conexión. Verifique su red e intente nuevamente.',
     UNKNOWN_ERROR: 'Error desconocido. Intente nuevamente más tarde.',
-    SESSION_ERROR: 'Error al guardar la sesión. Contacte al administrador.'
+    SESSION_ERROR: 'Error al guardar la sesión. Contacte al administrador.',
+    // Nuevo mensaje genérico para errores de permisos
+    PERMISSION_DENIED_GENERIC: 'Acceso denegado. Su usuario no está autorizado para utilizar este sistema.'
 };
 
 // ========== UTILIDADES DE RUT ========== 
@@ -189,35 +193,55 @@ function mostrarError(mensaje) {
     alert('❌ ' + mensaje);
 }
 
+/**
+ * Obtiene el mensaje de error adecuado, filtrando información sensible
+ * @param {Object} errorData - Objeto de error recibido
+ * @returns {string} Mensaje de error seguro para mostrar al usuario
+ */
 function obtenerMensajeError(errorData) {
     if (!errorData) return ERROR_MESSAGES.UNKNOWN_ERROR;
     
+    var mensajeOriginal = '';
+
+    // 1. Extraer el mensaje original de diversas fuentes posibles
     if (errorData.errors) {
         var errors = errorData.errors;
         
         if (errors.rut) {
-            if (Array.isArray(errors.rut)) {
-                return errors.rut[0];
-            }
-            return errors.rut;
+            mensajeOriginal = Array.isArray(errors.rut) ? errors.rut[0] : errors.rut;
+        } else if (errors.password) {
+            mensajeOriginal = Array.isArray(errors.password) ? errors.password[0] : errors.password;
+        } else {
+            var primerError = errors[Object.keys(errors)[0]];
+            mensajeOriginal = Array.isArray(primerError) ? primerError[0] : primerError;
         }
-        
-        if (errors.password) {
-            if (Array.isArray(errors.password)) {
-                return errors.password[0];
-            }
-            return errors.password;
-        }
-        
-        var primerError = errors[Object.keys(errors)[0]];
-        return Array.isArray(primerError) ? primerError[0] : primerError;
+    } else if (errorData.message) {
+        mensajeOriginal = errorData.message;
     }
     
-    if (errorData.message) {
-        return errorData.message;
+    // Si no hay mensaje original, usar desconocido
+    if (!mensajeOriginal) {
+        return ERROR_MESSAGES.UNKNOWN_ERROR;
     }
+
+    // 2. FILTRO DE SEGURIDAD: Detectar si el mensaje revela información interna
+    // Buscamos palabras clave como "perfil", "90", "310", "Mesa de Ayuda", "Administrador"
+    var mensajeLower = mensajeOriginal.toLowerCase();
     
-    return ERROR_MESSAGES.UNKNOWN_ERROR;
+    if (mensajeLower.indexOf('perfil') !== -1 || 
+        mensajeLower.indexOf('90') !== -1 || 
+        mensajeLower.indexOf('310') !== -1 || 
+        mensajeLower.indexOf('mesa de ayuda') !== -1 || 
+        mensajeLower.indexOf('administrador') !== -1 ||
+        mensajeLower.indexOf('permisos') !== -1) {
+        
+        // Si detecta información sensible, devolver mensaje genérico
+        console.warn('⚠️ Mensaje de error original ocultado por seguridad:', mensajeOriginal);
+        return ERROR_MESSAGES.PERMISSION_DENIED_GENERIC;
+    }
+
+    // 3. Si es seguro, devolver el mensaje original (o uno mapeado si es muy técnico)
+    return mensajeOriginal;
 }
 
 // ========== PROCESO DE AUTENTICACIÓN ========== 
@@ -378,10 +402,12 @@ function iniciarSesion() {
             ocultarCarga();
             toggleFormulario(false);
             
+            // Aquí se aplica el filtro de seguridad
             var mensaje = obtenerMensajeError(error);
             mostrarError(mensaje);
             
-            console.error('Error de autenticación:', error);
+            // El error completo se mantiene en consola solo para debug del desarrollador
+            console.error('Error de autenticación (detalle interno):', error);
         });
 }
 
@@ -424,6 +450,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    console.log('✅ Sistema de login inicializado correctamente (v4.1)');
+    console.log('✅ Sistema de login inicializado correctamente (v4.2 - Seguridad Mejorada)');
     console.log('✅ Validación completa de RUT con dígito verificador K habilitada');
+    console.log('✅ Filtrado de mensajes de error sensibles activado');
 });

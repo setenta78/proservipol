@@ -4,26 +4,27 @@
  * Compatible con PHP 5.1.2 y MySQL 5.0.77
  */
 
-require_once "config.php";
-require_once(dirname(__FILE__) . '/../api/db/dbAutentificaTic.Class.php');
+// No incluir config.php aquí directamente si se llama desde index.php que ya lo hizo
+// Pero para seguridad de ejecución directa, verificamos $link
+if (!isset($link)) {
+    require_once "config.php";
+}
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['codigo'])) {
-    $codigo = $_POST['codigo'];
-    $resultado = eliminarUsuario($codigo);
-    echo json_encode($resultado);
+if (!class_exists('AutentificaTicAPI')) {
+    require_once(dirname(__FILE__) . '/../api/db/dbAutentificaTic.Class.php');
 }
 
 /**
  * Elimina un usuario (desactiva en BD y elimina de AutentificaTIC API)
  * 
  * @param string $codigo Código del funcionario a eliminar
- * @return array Resultado de la operación en formato JSON
+ * @return array Resultado de la operación
  */
 function eliminarUsuario($codigo)
 {
     global $link;
     
-    // Validación: solo verificar que no esté vacío (códigos son alfanuméricos ej: 013926H)
+    // Validación: solo verificar que no esté vacío
     $codigo = trim($codigo);
     if (empty($codigo)) {
         return array(
@@ -34,7 +35,7 @@ function eliminarUsuario($codigo)
     }
     
     // Escapar datos
-    $codigo = mysql_real_escape_string(trim($codigo), $link);
+    $codigo = mysql_real_escape_string($codigo, $link);
     
     // ========================================
     // PASO 1: Verificar que el usuario existe y obtener su RUT
@@ -131,6 +132,10 @@ function eliminarUsuario($codigo)
     }
     
     // Obtener token de sesión del usuario que elimina
+    if (!isset($_SESSION)) {
+        @session_start();
+    }
+    
     $accessToken = isset($_SESSION['access_token']) ? $_SESSION['access_token'] : null;
     
     if (!$accessToken) {
@@ -148,13 +153,13 @@ function eliminarUsuario($codigo)
         $resultApi = $api->eliminarUsuario($rut);
         
         if (!$resultApi['success']) {
-            // Si el usuario no existe en Autentificatic (404), igual confirmar en BD
             $http_code = isset($resultApi['http_code']) ? $resultApi['http_code'] : 0;
             
+            // Si el usuario no existe en Autentificatic (404), igual confirmar en BD
             if ($http_code == 404 || 
-                strpos($resultApi['message'], 'no encontrado') !== false || 
-                strpos($resultApi['message'], 'not found') !== false) {
-                // Usuario no estaba en Autentificatic — confirmar solo en BD
+                strpos(strtolower($resultApi['message']), 'no encontrado') !== false || 
+                strpos(strtolower($resultApi['message']), 'not found') !== false) {
+                
                 mysql_query("COMMIT", $link);
                 registrarAuditoriaEliminar($link, $codigo, $nombreCompleto);
                 return array(
@@ -222,24 +227,31 @@ function eliminarUsuario($codigo)
  */
 function registrarAuditoriaEliminar($link, $codigo, $nombre)
 {
-    $usuarioEliminador = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 0;
+    $usuarioEliminador = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : (isset($_SESSION['USUARIO_CODIGOFUNCIONARIO']) ? $_SESSION['USUARIO_CODIGOFUNCIONARIO'] : 0);
     
     $codigo = mysql_real_escape_string($codigo, $link);
     $nombre = mysql_real_escape_string($nombre, $link);
-    $usuarioEliminador = intval($usuarioEliminador);
+    $usuarioEliminador = mysql_real_escape_string($usuarioEliminador, $link);
     
-    $sqlAudit = "INSERT INTO BITACORA_AUDITORIA (
-        ACCION,
-        DESCRIPCION,
-        USUARIO_ID,
-        FECHA_ACCION
-    ) VALUES (
-        'ELIMINAR_USUARIO',
-        'Usuario $nombre ($codigo) eliminado del sistema',
-        $usuarioEliminador,
-        NOW()
-    )";
+    // Verificar si existe la tabla BITACORA_AUDITORIA o usar BITACORA_USUARIO si no
+    $checkTable = mysql_query("SHOW TABLES LIKE 'BITACORA_AUDITORIA'", $link);
     
-    mysql_query($sqlAudit, $link);
+    if (mysql_num_rows($checkTable) > 0) {
+        $sqlAudit = "INSERT INTO BITACORA_AUDITORIA (
+            ACCION,
+            DESCRIPCION,
+            USUARIO_ID,
+            FECHA_ACCION
+        ) VALUES (
+            'ELIMINAR_USUARIO',
+            'Usuario $nombre ($codigo) eliminado del sistema',
+            '$usuarioEliminador',
+            NOW()
+        )";
+        mysql_query($sqlAudit, $link);
+    } else {
+        // Fallback a log de error si no hay tabla específica
+        error_log("AUDITORIA: Usuario $nombre ($codigo) eliminado por $usuarioEliminador");
+    }
 }
 ?>

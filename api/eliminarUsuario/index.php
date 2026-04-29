@@ -1,13 +1,15 @@
 <?php
 session_start();
-// ✅ FIX: usar dirname(__FILE__) para ruta absoluta
+
+// Incluir herramientas (asegurando ruta absoluta)
 include_once(dirname(__FILE__) . '/../tools.php');
-// Deshabilitar salida de errores HTML
+
+// Deshabilitar salida de errores HTML estrictamente
 error_reporting(0);
 ini_set('display_errors', 0);
 
 // Validar sesión activa
-if (!isset($_SESSION['user_id'])) {
+if (!isset($_SESSION['USUARIO_CODIGOFUNCIONARIO']) && !isset($_SESSION['user_id'])) {
     header('Content-Type: application/json; charset=UTF-8');
     http_response_code(401);
     echo json_encode(array(
@@ -18,6 +20,7 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// Headers CORS
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Max-Age: 86400');
@@ -56,7 +59,7 @@ try {
         exit;
     }
     
-    // ✅ FIX: validar alfanumérico (ej: 013926H), NO is_numeric
+    // Validar código alfanumérico
     $codigo = trim($data['codigo']);
     if (empty($codigo) || !preg_match('/^[a-zA-Z0-9]+$/', $codigo)) {
         http_response_code(400);
@@ -69,11 +72,13 @@ try {
     }
     
     // Incluir queries con lógica de eliminación atómica
+    // NOTA: No ejecutar nada aquí, solo definir funciones
     require_once(dirname(__FILE__) . '/../../queries/eliminar_queries.php');
     
-    // ✅ FIX: llamar a la función y retornar resultado
-    $resultado = eliminarUsuario($codigo, $_SESSION['user_id']);
+    // Ejecutar la función de eliminación (SOLO un parámetro)
+    $resultado = eliminarUsuario($codigo);
     
+    // Establecer código de respuesta HTTP
     if ($resultado['success']) {
         http_response_code(200);
     } else {
@@ -81,6 +86,7 @@ try {
         http_response_code($httpCode);
     }
     
+    // Enviar única respuesta JSON
     echo json_encode($resultado);
     exit;
 

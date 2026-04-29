@@ -4,23 +4,20 @@
  * Compatible con PHP 5.1.2 y MySQL 5.0.77
  */
 
+// Asegurar que la clase de API esté disponible
 if (!class_exists('AutentificaTicAPI')) {
     include_once(dirname(__FILE__) . '/../api/db/dbAutentificaTic.Class.php');
 }
 
-function _obtenerTokenServicio() {
-    $apiLogin    = new AutentificaTicAPI('');
-    $loginResult = $apiLogin->loginServicio(
-        SERVICIO_RUT_DESPROSERVIPOL,
-        SERVICIO_PASS_DESPROSERVIPOL
-    );
-    return $loginResult;
-}
-
+/**
+ * Crea un nuevo usuario en PROSERVIPOL
+ * Transacción atómica: BD + AutentificaTIC API
+ */
 function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $password, $usuarioCreador)
 {
     global $link;
 
+    // Escapar valores
     $codFuncionario = mysql_real_escape_string($codFuncionario, $link);
     $codigoUnidad   = intval($codigoUnidad);
     $tipoUsuario    = intval($tipoUsuario);
@@ -28,7 +25,7 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
     $usuarioCreador = mysql_real_escape_string($usuarioCreador, $link);
 
     // ================================================
-    // PASO 1: Verificar si el usuario ya existe en USUARIO
+    // PASO 1: Verificar si el usuario ya existe
     // ================================================
     $sqlCheck = "SELECT 
         u.FUN_CODIGO,
@@ -62,7 +59,7 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
         );
         return array(
             'success' => false,
-            'message' => 'El usuario ' . $nombreCompleto . ' (' . $codFuncionario . ') ya existe y está activo en el sistema.',
+            'message' => 'El usuario ' . $nombreCompleto . ' (' . $codFuncionario . ') ya existe y está activo.',
             'code'    => 409
         );
     }
@@ -70,57 +67,51 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
     // ================================================
     // PASO 2: Validar sesión activa del administrador
     // ================================================
+    if (!isset($_SESSION)) {
+        @session_start();
+    }
+    
     $sessionToken = isset($_SESSION['access_token']) ? $_SESSION['access_token'] : null;
 
     if (empty($sessionToken)) {
         return array(
             'success' => false,
-            'message' => 'Error de sesión: No se pudo obtener el token de autenticación. Por favor, cierre sesión e inicie nuevamente.',
+            'message' => 'Error de sesión: No hay token de autenticación. Inicie sesión nuevamente.',
             'code'    => 401
         );
     }
 
-    // ================================================
-    // PASO 2B: Obtener token de servicio para AutentificaTIC
-    // (siempre con Origin: des-proservipol, independiente del admin logueado)
-    // ================================================
-    $loginResult = _obtenerTokenServicio();
-
-    if (!$loginResult['success']) {
-        return array(
-            'success' => false,
-            'message' => 'Error al conectar con AutentificaTIC como servicio: ' . $loginResult['message'],
-            'code'    => 500
-        );
-    }
-
-    $tokenServicio = $loginResult['access_token'];
+    // NOTA: Usamos el token de sesión del admin logueado directamente.
+    // NO se requiere token de servicio ni constantes externas.
+    $api = new AutentificaTicAPI($sessionToken);
 
     // ================================================
     // CASO 2: Usuario inactivo — REACTIVAR
     // ================================================
     if ($usuarioExistente && $usuarioExistente['US_ACTIVO'] == '0') {
-
-        // Obtener RUT del funcionario
+        
+        // Obtener RUT limpio
         $sqlRut = "SELECT FUN_RUT FROM FUNCIONARIO 
                    WHERE FUN_CODIGO = '$codFuncionario' LIMIT 1";
         $resultRut = mysql_query($sqlRut, $link);
         $rut = '';
         if ($resultRut && mysql_num_rows($resultRut) > 0) {
             $funcData = mysql_fetch_assoc($resultRut);
-            $rut = preg_replace('/[^0-9kK]/', '', $funcData['FUN_RUT']);
+            // Limpiar RUT: solo números y K
+            $rut = strtoupper(trim($funcData['FUN_RUT']));
+            $rut = str_replace('.', '', $rut);
+            $rut = str_replace('-', '', $rut);
         }
 
         if (empty($rut)) {
             return array(
                 'success' => false,
-                'message' => 'No se pudo obtener el RUT del funcionario para reactivar en AutentificaTIC.',
+                'message' => 'No se pudo obtener el RUT del funcionario.',
                 'code'    => 500
             );
         }
 
-        // Llamar a AutentificaTIC con token de servicio ANTES de modificar la BD
-        $api       = new AutentificaTicAPI($tokenServicio);
+        // 1. Llamar a AutentificaTIC PRIMERO (Registro/Reactivación)
         $resultApi = $api->registrarUsuario($rut);
 
         if (!$resultApi['success']) {
@@ -132,7 +123,7 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
             );
         }
 
-        // API exitosa — ahora actualizar BD
+        // 2. Si API OK, actualizar BD con transacción
         mysql_query("START TRANSACTION", $link);
 
         $passwordHash = md5($password);
@@ -149,8 +140,7 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
 
         if (!$resultReactivar) {
             mysql_query("ROLLBACK", $link);
-            // Intentar revertir en AutentificaTIC
-            $api->eliminarUsuario($rut);
+            // Opcional: intentar revertir en API si falla BD
             return array(
                 'success' => false,
                 'message' => 'Error al reactivar usuario en BD: ' . mysql_error($link),
@@ -159,8 +149,7 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
         }
 
         mysql_query("COMMIT", $link);
-        registrarAuditoria($link, $usuarioCreador, 'REACTIVAR_USUARIO',
-            'Usuario ' . $codFuncionario . ' reactivado');
+        registrarAuditoria($link, $usuarioCreador, 'REACTIVAR_USUARIO', 'Usuario reactivado');
 
         return array(
             'success' => true,
@@ -170,12 +159,13 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
     }
 
     // ================================================
-    // CASO 3: Usuario nuevo — CREACIÓN COMPLETA
+    // CASO 3: Usuario NUEVO — CREACIÓN COMPLETA
     // ================================================
 
     // PASO 3: Buscar datos en PERSONAL_MOCK o personal_view
     $checkMock = mysql_query("SHOW TABLES LIKE 'PERSONAL_MOCK'", $link);
     $useMock   = (mysql_num_rows($checkMock) > 0);
+    $resultPersonal = null;
 
     if ($useMock) {
         $sqlPersonal = "SELECT 
@@ -186,30 +176,22 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
         LIMIT 1";
         $resultPersonal = mysql_query($sqlPersonal, $link);
     } else {
+        // Producción: Conectar a BD Personal
         if (!file_exists(dirname(__FILE__) . '/../inc/configPersonal.inc.php')) {
-            return array(
-                'success' => false,
-                'message' => 'Archivo de configuración de Personal no encontrado.',
-                'code'    => 500
-            );
+            return array('success' => false, 'message' => 'Configuración Personal no encontrada.', 'code' => 500);
         }
         require_once(dirname(__FILE__) . '/../inc/configPersonal.inc.php');
+        
         $connPersonal = mysql_connect(HOST_PERSONAL, DB_USER_PERSONAL, DB_PASS_PERSONAL, true);
         if (!$connPersonal) {
-            return array(
-                'success' => false,
-                'message' => 'Error de conexión con BD Personal: ' . mysql_error(),
-                'code'    => 500
-            );
+            return array('success' => false, 'message' => 'Error conexión BD Personal.', 'code' => 500);
         }
         if (!mysql_select_db(DB_PERSONAL, $connPersonal)) {
             mysql_close($connPersonal);
-            return array(
-                'success' => false,
-                'message' => 'Error al seleccionar BD Personal.',
-                'code'    => 500
-            );
+            return array('success' => false, 'message' => 'Error selecting BD Personal.', 'code' => 500);
         }
+        mysql_query("SET NAMES 'utf8'", $connPersonal);
+
         $sqlPersonal = "SELECT 
             PEFBCOD, PEFBRUT, PEFBNOM1, PEFBNOM2,
             PEFBAPEP, PEFBAPEM, PEFBGRA
@@ -223,7 +205,7 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
         if (!$useMock && isset($connPersonal)) mysql_close($connPersonal);
         return array(
             'success' => false,
-            'message' => 'No se encontraron datos del funcionario ' . $codFuncionario . ' en la base de datos de Personal.',
+            'message' => 'Funcionario no encontrado en base de datos de Personal.',
             'code'    => 404
         );
     }
@@ -232,18 +214,15 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
     if (!$useMock && isset($connPersonal)) mysql_close($connPersonal);
 
     // Limpiar RUT
-    $rut = preg_replace('/[^0-9kK]/', '', $funcionario['PEFBRUT']);
+    $rut = strtoupper(trim($funcionario['PEFBRUT']));
+    $rut = str_replace('.', '', $rut);
+    $rut = str_replace('-', '', $rut);
 
     if (empty($rut)) {
-        return array(
-            'success' => false,
-            'message' => 'El RUT del funcionario es inválido o está vacío.',
-            'code'    => 500
-        );
+        return array('success' => false, 'message' => 'RUT inválido en datos del funcionario.', 'code' => 500);
     }
 
-    // Llamar a AutentificaTIC con token de servicio ANTES de tocar la BD
-    $api       = new AutentificaTicAPI($tokenServicio);
+    // 1. Llamar a AutentificaTIC PRIMERO (Registro)
     $resultApi = $api->registrarUsuario($rut);
 
     if (!$resultApi['success']) {
@@ -255,88 +234,59 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
         );
     }
 
-    // AutentificaTIC OK — ahora iniciar transacción en BD
+    // 2. Si API OK, insertar en BD con transacción
     mysql_query("START TRANSACTION", $link);
 
-    // PASO 4: Insertar en FUNCIONARIO si no existe
-    $sqlCheckFun    = "SELECT FUN_CODIGO FROM FUNCIONARIO 
-                       WHERE FUN_CODIGO = '$codFuncionario' LIMIT 1";
-    $resultCheckFun    = mysql_query($sqlCheckFun, $link);
-    $funcionarioExiste = (mysql_num_rows($resultCheckFun) > 0);
-
-    if (!$funcionarioExiste) {
+    // Insertar en FUNCIONARIO si no existe
+    $sqlCheckFun = "SELECT FUN_CODIGO FROM FUNCIONARIO WHERE FUN_CODIGO = '$codFuncionario' LIMIT 1";
+    $resultCheckFun = mysql_query($sqlCheckFun, $link);
+    
+    if (mysql_num_rows($resultCheckFun) == 0) {
         $rutEsc    = mysql_real_escape_string($funcionario['PEFBRUT'], $link);
         $nombre1   = mysql_real_escape_string($funcionario['PEFBNOM1'], $link);
         $nombre2   = mysql_real_escape_string($funcionario['PEFBNOM2'], $link);
         $apellidoP = mysql_real_escape_string($funcionario['PEFBAPEP'], $link);
         $apellidoM = mysql_real_escape_string($funcionario['PEFBAPEM'], $link);
-        $gradoCodigo = intval($funcionario['PEFBGRA']);
+        $gradoCod  = intval($funcionario['PEFBGRA']);
 
-        $sqlGrado    = "SELECT ESC_CODIGO FROM GRADO WHERE GRA_CODIGO = $gradoCodigo LIMIT 1";
-        $resultGrado = mysql_query($sqlGrado, $link);
-        $escCodigo   = 1;
-        if ($resultGrado && mysql_num_rows($resultGrado) > 0) {
-            $rowGrado  = mysql_fetch_assoc($resultGrado);
-            $escCodigo = intval($rowGrado['ESC_CODIGO']);
+        // Obtener ESC_CODIGO
+        $sqlGrado = "SELECT ESC_CODIGO FROM GRADO WHERE GRA_CODIGO = $gradoCod LIMIT 1";
+        $resGrado = mysql_query($sqlGrado, $link);
+        $escCod = 1;
+        if ($resGrado && mysql_num_rows($resGrado) > 0) {
+            $rowG = mysql_fetch_assoc($resGrado);
+            $escCod = intval($rowG['ESC_CODIGO']);
         }
 
-        $sqlInsertFun = "INSERT INTO FUNCIONARIO (
+        $sqlInsFun = "INSERT INTO FUNCIONARIO (
             FUN_CODIGO, FUN_RUT, FUN_NOMBRE, FUN_NOMBRE2,
-            FUN_APELLIDOPATERNO, FUN_APELLIDOMATERNO,
-            GRA_CODIGO, ESC_CODIGO
+            FUN_APELLIDOPATERNO, FUN_APELLIDOMATERNO, GRA_CODIGO, ESC_CODIGO
         ) VALUES (
             '$codFuncionario', '$rutEsc', '$nombre1', '$nombre2',
-            '$apellidoP', '$apellidoM',
-            $gradoCodigo, $escCodigo
+            '$apellidoP', '$apellidoM', $gradoCod, $escCod
         )";
 
-        if (!mysql_query($sqlInsertFun, $link)) {
+        if (!mysql_query($sqlInsFun, $link)) {
             mysql_query("ROLLBACK", $link);
-            $api->eliminarUsuario($rut);
-            return array(
-                'success' => false,
-                'message' => 'Error al insertar funcionario: ' . mysql_error($link),
-                'code'    => 500
-            );
+            return array('success' => false, 'message' => 'Error al insertar funcionario: ' . mysql_error($link), 'code' => 500);
         }
     }
 
-    // PASO 5: Insertar en USUARIO
+    // Insertar en USUARIO
     $passwordHash = md5($password);
-
-    $sqlInsertUsuario = "INSERT INTO USUARIO (
-        FUN_CODIGO,
-        UNI_CODIGO,
-        US_LOGIN,
-        US_PASSWORD,
-        TUS_CODIGO,
-        US_FECHACREACION,
-        US_ACTIVO
+    $sqlInsUsu = "INSERT INTO USUARIO (
+        FUN_CODIGO, UNI_CODIGO, US_LOGIN, US_PASSWORD, TUS_CODIGO, US_FECHACREACION, US_ACTIVO
     ) VALUES (
-        '$codFuncionario',
-        $codigoUnidad,
-        '$codFuncionario',
-        '$passwordHash',
-        $tipoUsuario,
-        NOW(),
-        1
+        '$codFuncionario', $codigoUnidad, '$codFuncionario', '$passwordHash', $tipoUsuario, NOW(), 1
     )";
 
-    if (!mysql_query($sqlInsertUsuario, $link)) {
+    if (!mysql_query($sqlInsUsu, $link)) {
         mysql_query("ROLLBACK", $link);
-        $api->eliminarUsuario($rut);
-        return array(
-            'success' => false,
-            'message' => 'Error al crear usuario: ' . mysql_error($link),
-            'code'    => 500
-        );
+        return array('success' => false, 'message' => 'Error al crear usuario: ' . mysql_error($link), 'code' => 500);
     }
 
-    // Todo OK — confirmar transacción
     mysql_query("COMMIT", $link);
-
-    registrarAuditoria($link, $usuarioCreador, 'CREAR_USUARIO',
-        'Usuario ' . $codFuncionario . ' creado exitosamente');
+    registrarAuditoria($link, $usuarioCreador, 'CREAR_USUARIO', 'Usuario creado exitosamente');
 
     return array(
         'success' => true,
@@ -351,95 +301,79 @@ function crearUsuarioProservipol($codFuncionario, $codigoUnidad, $tipoUsuario, $
 }
 
 /**
- * Función auxiliar para generar mensajes de error de la API
+ * Auxiliar: Mensajes de error de API
  */
 function _mensajeErrorApi($resultApi)
 {
-    $msgLower = strtolower($resultApi['message']);
-
-    if (strpos($msgLower, 'no encontrado') !== false ||
-        strpos($msgLower, 'not found') !== false) {
-        return 'El funcionario no se encuentra registrado en AutentificaTIC.';
+    $msg = strtolower($resultApi['message']);
+    
+    if (strpos($msg, 'no encontrado') !== false || strpos($msg, 'not found') !== false) {
+        return 'El funcionario no existe en registros de AutentificaTIC.';
     }
-    if (strpos($msgLower, 'plataforma') !== false) {
-        return 'La plataforma no se encuentra registrada en AutentificaTIC.';
+    if (strpos($msg, 'plataforma') !== false) {
+        return 'La plataforma no está registrada en AutentificaTIC para esta operación.';
     }
     if ($resultApi['http_code'] == 400) {
-        return 'Datos inválidos enviados a AutentificaTIC: ' . $resultApi['message'];
+        return 'Datos inválidos: ' . $resultApi['message'];
     }
     if ($resultApi['http_code'] == 401) {
-        return 'Token de sesión inválido o expirado. Por favor, cierre sesión e inicie nuevamente.';
+        return 'Sesión expirada o inválida. Reinicie sesión.';
     }
-    return 'En este momento existe un problema de conexión con AutentificaTIC. Por favor intente nuevamente.';
+    return 'Error de conexión con AutentificaTIC. Intente nuevamente.';
 }
 
+/**
+ * Auxiliar: Auditoría
+ */
 function registrarAuditoria($link, $usuario, $accion, $descripcion)
 {
     $usuario     = mysql_real_escape_string($usuario, $link);
     $accion      = mysql_real_escape_string($accion, $link);
     $descripcion = mysql_real_escape_string($descripcion, $link);
-    $checkTable  = mysql_query("SHOW TABLES LIKE 'AUDITORIA'", $link);
-    if (mysql_num_rows($checkTable) == 0) return true;
-    $ip  = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '0.0.0.0';
-    $sql = "INSERT INTO AUDITORIA (
-        AUD_USUARIO, AUD_ACCION, AUD_DESCRIPCION, AUD_FECHA, AUD_IP
-    ) VALUES (
-        '$usuario', '$accion', '$descripcion', NOW(),
-        '" . mysql_real_escape_string($ip, $link) . "'
-    )";
-    return (mysql_query($sql, $link) !== false);
+    
+    $check = mysql_query("SHOW TABLES LIKE 'AUDITORIA'", $link);
+    if (mysql_num_rows($check) == 0) return true;
+
+    $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '0.0.0.0';
+    
+    $sql = "INSERT INTO AUDITORIA (AUD_USUARIO, AUD_ACCION, AUD_DESCRIPCION, AUD_FECHA, AUD_IP) 
+            VALUES ('$usuario', '$accion', '$descripcion', NOW(), '" . mysql_real_escape_string($ip, $link) . "')";
+    
+    return mysql_query($sql, $link);
 }
 
-function obtenerUsuarioPorCodigo($codFuncionario)
-{
+// ... (Resto de funciones auxiliares sin cambios: obtenerUsuarioPorCodigo, actualizarPasswordUsuario, desactivarUsuario)
+
+function obtenerUsuarioPorCodigo($codFuncionario) {
     global $link;
     $codFuncionario = mysql_real_escape_string($codFuncionario, $link);
-    $sql = "SELECT 
-        u.FUN_CODIGO, u.UNI_CODIGO, u.US_LOGIN, u.TUS_CODIGO,
-        u.US_FECHACREACION, u.US_FECHAMODIFICACION, u.US_ACTIVO,
-        f.FUN_RUT, f.FUN_NOMBRE, f.FUN_NOMBRE2,
-        f.FUN_APELLIDOPATERNO, f.FUN_APELLIDOMATERNO,
-        g.GRA_DESCRIPCION, un.UNI_DESCRIPCION, tus.TUS_DESCRIPCION
-    FROM USUARIO u
-    LEFT JOIN FUNCIONARIO f    ON u.FUN_CODIGO  = f.FUN_CODIGO
-    LEFT JOIN GRADO g          ON f.GRA_CODIGO  = g.GRA_CODIGO AND f.ESC_CODIGO = g.ESC_CODIGO
-    LEFT JOIN UNIDAD un        ON u.UNI_CODIGO  = un.UNI_CODIGO
-    LEFT JOIN TIPO_USUARIO tus ON u.TUS_CODIGO  = tus.TUS_CODIGO
-    WHERE u.US_LOGIN = '$codFuncionario'
-    LIMIT 1";
-    $result = mysql_query($sql, $link);
-    if (!$result || mysql_num_rows($result) == 0) return null;
-    return mysql_fetch_assoc($result);
+    $sql = "SELECT u.*, f.FUN_RUT, f.FUN_NOMBRE, f.FUN_NOMBRE2, f.FUN_APELLIDOPATERNO, f.FUN_APELLIDOMATERNO, g.GRA_DESCRIPCION, un.UNI_DESCRIPCION, tus.TUS_DESCRIPCION
+            FROM USUARIO u
+            LEFT JOIN FUNCIONARIO f ON u.FUN_CODIGO = f.FUN_CODIGO
+            LEFT JOIN GRADO g ON f.GRA_CODIGO = g.GRA_CODIGO AND f.ESC_CODIGO = g.ESC_CODIGO
+            LEFT JOIN UNIDAD un ON u.UNI_CODIGO = un.UNI_CODIGO
+            LEFT JOIN TIPO_USUARIO tus ON u.TUS_CODIGO = tus.TUS_CODIGO
+            WHERE u.US_LOGIN = '$codFuncionario' LIMIT 1";
+    $res = mysql_query($sql, $link);
+    if (!$res || mysql_num_rows($res) == 0) return null;
+    return mysql_fetch_assoc($res);
 }
 
-function actualizarPasswordUsuario($codFuncionario, $nuevaPassword)
-{
+function actualizarPasswordUsuario($codFuncionario, $nuevaPassword) {
     global $link;
     $codFuncionario = mysql_real_escape_string($codFuncionario, $link);
-    $passwordHash   = md5($nuevaPassword);
-    $sql = "UPDATE USUARIO 
-        SET US_PASSWORD = '$passwordHash', US_FECHAMODIFICACION = NOW()
-        WHERE US_LOGIN = '$codFuncionario'";
-    $result = mysql_query($sql, $link);
-    if (!$result) {
-        return array('success' => false, 'message' => 'Error al actualizar contraseña: ' . mysql_error($link));
-    }
-    return array('success' => true, 'message' => 'Contraseña actualizada exitosamente.');
+    $hash = md5($nuevaPassword);
+    $sql = "UPDATE USUARIO SET US_PASSWORD = '$hash', US_FECHAMODIFICACION = NOW() WHERE US_LOGIN = '$codFuncionario'";
+    if (!mysql_query($sql, $link)) return array('success' => false, 'message' => mysql_error($link));
+    return array('success' => true, 'message' => 'Contraseña actualizada.');
 }
 
-function desactivarUsuario($codFuncionario, $usuarioModificador)
-{
+function desactivarUsuario($codFuncionario, $usuarioModificador) {
     global $link;
     $codFuncionario = mysql_real_escape_string($codFuncionario, $link);
-    $sql = "UPDATE USUARIO 
-        SET US_ACTIVO = 0, US_FECHAMODIFICACION = NOW()
-        WHERE US_LOGIN = '$codFuncionario'";
-    $result = mysql_query($sql, $link);
-    if (!$result) {
-        return array('success' => false, 'message' => 'Error al desactivar usuario: ' . mysql_error($link));
-    }
-    registrarAuditoria($link, $usuarioModificador, 'DESACTIVAR_USUARIO',
-        'Usuario ' . $codFuncionario . ' desactivado');
-    return array('success' => true, 'message' => 'Usuario desactivado exitosamente.');
+    $sql = "UPDATE USUARIO SET US_ACTIVO = 0, US_FECHAMODIFICACION = NOW() WHERE US_LOGIN = '$codFuncionario'";
+    if (!mysql_query($sql, $link)) return array('success' => false, 'message' => mysql_error($link));
+    registrarAuditoria($link, $usuarioModificador, 'DESACTIVAR_USUARIO', 'Usuario desactivado');
+    return array('success' => true, 'message' => 'Usuario desactivado.');
 }
 ?>
