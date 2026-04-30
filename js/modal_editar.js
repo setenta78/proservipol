@@ -1,111 +1,172 @@
-// CARGAMOS EL MODAL CON SUS DATOS
+// ============================================================
+// MODAL EDITAR USUARIO — PROSERVIPOL
+// Compatible con jQuery 1.12.4 | PHP 5.1.2
+// ============================================================
+
+// ABRIR MODAL CON DATOS DEL USUARIO
 function abrirModal(codigo) {
-    const modal = document.getElementById("modalEditar");
-    const contenido = document.getElementById("modalContenido");
+  var modal = document.getElementById("modalEditar");
+  var contenido = document.getElementById("modalContenido");
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+  contenido.classList.remove("scale-95", "opacity-0");
+  contenido.classList.add("scale-100", "opacity-100");
 
-    modal.classList.remove("hidden");
-    modal.classList.add("flex");
-
-    // Reset estilos antes de animar
-    contenido.classList.remove("scale-95", "opacity-0");
-    contenido.classList.add("scale-100", "opacity-100");
-
-    fetch("editar_usuario.php?codigo=" + encodeURIComponent(codigo))
-        .then((response) => response.text())
-        .then((html) => {
-            document.getElementById("contenidoModal").innerHTML = html;
-        })
-        .catch((err) => {
-            document.getElementById("contenidoModal").innerHTML = 
-                '<p class="text-red-600 text-center">Error cargando el formulario.</p>';
-            console.error(err);
-        });
-}
-
-function cerrarModal() {
-    const modal = document.getElementById("modalEditar");
-    const contenido = document.getElementById("modalContenido");
-    
-    // Aplica animación de salida
-    contenido.classList.remove("scale-100", "opacity-100");
-    contenido.classList.add("scale-95", "opacity-0");
-
-    setTimeout(() => {
-        modal.classList.remove("flex");
-        modal.classList.add("hidden");
-        document.getElementById("contenidoModal").innerHTML =
-            '<p class="text-center text-gray-500">Cargando...</p>';
-    }, 300);
-    
-    location.reload();
-}
-
-function guardarCambios() {
-    const form = document.getElementById("form-editar-usuario");
-    const codigo = document.getElementById("codigo")?.value || "";
-    const perfil = document.getElementById("perfil")?.value || "";
-    const unidad = document.getElementById("unidad")?.value || "";
-    const passwordInput = document.getElementById("password");
-    const password = passwordInput ? passwordInput.value : "";
-
-    // Validar campos obligatorios (Password NO es obligatorio en edición)
-    if (!codigo || !perfil || !unidad) {
-        alert("Por favor, complete el Perfil y la Unidad.");
-        return;
-    }
-
-    // Validar longitud de password si se ingresó uno nuevo
-    if (password && password.length < 6) {
-        alert("La contraseña nueva debe tener al menos 6 caracteres.");
-        return;
-    }
-
-    const datos = new FormData();
-    datos.append("codigo", codigo);
-    datos.append("perfil", perfil);
-    datos.append("unidad", unidad);
-    datos.append("password", password);
-
-    fetch("queries/editar_queries.php", {
-        method: "POST",
-        body: datos,
+  fetch("editar_usuario.php?codigo=" + encodeURIComponent(codigo))
+    .then(function(response) { return response.text(); })
+    .then(function(html) {
+      document.getElementById("contenidoModal").innerHTML = html;
     })
-    .then((response) => response.text())
-    .then((textoRespuesta) => {
-        // Intentar parsear JSON manualmente para compatibilidad PHP 5.1.2 si falla el auto-parse
-        let respuesta;
-        try {
-            // Limpieza básica por si hay espacios en blanco extra
-            textoRespuesta = textoRespuesta.trim();
-            respuesta = JSON.parse(textoRespuesta);
-        } catch (e) {
-            console.error("Error parseando JSON:", e, "Texto recibido:", textoRespuesta);
-            alert("Error en la respuesta del servidor. Revise la consola.");
-            return;
-        }
-
-        if (respuesta.success) {
-            alert("✅ " + respuesta.message);
-            cerrarModal();
-        } else {
-            alert("⚠️ Error: " + respuesta.message);
-        }
-    })
-    .catch((error) => {
-        alert("Ocurrió un error de conexión al guardar los cambios.");
-        console.error(error);
+    .catch(function(err) {
+      document.getElementById("contenidoModal").innerHTML =
+        '<p class="text-red-600 text-center">Error cargando el formulario.</p>';
+      console.error(err);
     });
 }
 
-// RECARGAMOS EL MODAL CON SUS DATOS (Si fuera necesario)
+// CERRAR MODAL
+function cerrarModal() {
+  var modal = document.getElementById("modalEditar");
+  var contenido = document.getElementById("modalContenido");
+  contenido.classList.remove("scale-100", "opacity-100");
+  contenido.classList.add("scale-95", "opacity-0");
+  setTimeout(function() {
+    modal.classList.remove("flex");
+    modal.classList.add("hidden");
+    document.getElementById("contenidoModal").innerHTML =
+      '<p class="text-center text-gray-500">Cargando...</p>';
+  }, 300);
+  location.reload();
+}
+
+// CONFIRMACIÓN INLINE — Transforma el botón en zona de confirmación
+function confirmarYGuardar() {
+  var codigo  = document.getElementById("codigo")  ? document.getElementById("codigo").value  : "";
+  var perfil  = document.getElementById("perfil")  ? document.getElementById("perfil").value  : "";
+  var unidad  = document.getElementById("unidad")  ? document.getElementById("unidad").value  : "";
+  var password = document.getElementById("password") ? document.getElementById("password").value : "";
+
+  // Validaciones previas antes de mostrar confirmación
+  if (!codigo || !perfil || !unidad) {
+    alert("Por favor, complete el Perfil y la Unidad.");
+    return;
+  }
+  if (password && password.length < 6) {
+    alert("La contraseña nueva debe tener al menos 6 caracteres.");
+    return;
+  }
+
+  // Reemplazar zona del botón con la confirmación inline
+  var zonaBotones = document.getElementById("zona-botones-editar");
+  if (!zonaBotones) {
+    alert("Error interno: no se encontró la zona de botones.");
+    return;
+  }
+
+  zonaBotones.innerHTML =
+    '<p class="text-xs font-semibold text-yellow-700 mb-2 text-center">¿Está seguro de modificar este usuario?</p>' +
+    '<div class="flex gap-2 justify-center">' +
+      '<button type="button" onclick="guardarCambios()" ' +
+        'class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 text-xs rounded">' +
+        'SÍ, CONFIRMAR' +
+      '</button>' +
+      '<button type="button" onclick="cancelarConfirmacion()" ' +
+        'class="bg-gray-400 hover:bg-gray-500 text-white font-semibold py-2 px-4 text-xs rounded">' +
+        'CANCELAR' +
+      '</button>' +
+    '</div>';
+}
+
+// CANCELAR — Restaura el botón original
+function cancelarConfirmacion() {
+  var zonaBotones = document.getElementById("zona-botones-editar");
+  if (!zonaBotones) return;
+
+  zonaBotones.innerHTML =
+    '<button type="button" onclick="confirmarYGuardar()" ' +
+      'class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 text-sm rounded">' +
+      'MODIFICAR USUARIO' +
+    '</button>' +
+    '<div id="mensaje-respuesta" class="text-sm p-2 hidden rounded"></div>';
+}
+
+// GUARDAR CAMBIOS — Se ejecuta sólo tras confirmación
+function guardarCambios() {
+  var codigo   = document.getElementById("codigo")   ? document.getElementById("codigo").value   : "";
+  var perfil   = document.getElementById("perfil")   ? document.getElementById("perfil").value   : "";
+  var unidad   = document.getElementById("unidad")   ? document.getElementById("unidad").value   : "";
+  var password = document.getElementById("password") ? document.getElementById("password").value : "";
+
+  if (!codigo || !perfil || !unidad) {
+    alert("Por favor, complete el Perfil y la Unidad.");
+    return;
+  }
+  if (password && password.length < 6) {
+    alert("La contraseña nueva debe tener al menos 6 caracteres.");
+    return;
+  }
+
+  // Mostrar estado "Guardando..." en la zona de botones
+  var zonaBotones = document.getElementById("zona-botones-editar");
+  if (zonaBotones) {
+    zonaBotones.innerHTML =
+      '<p class="text-xs text-blue-700 font-semibold text-center">⏳ Guardando cambios...</p>';
+  }
+
+  var datos = new FormData();
+  datos.append("codigo",   codigo);
+  datos.append("perfil",   perfil);
+  datos.append("unidad",   unidad);
+  datos.append("password", password);
+
+  fetch("queries/editar_queries.php", {
+    method: "POST",
+    body: datos
+  })
+  .then(function(response) { return response.text(); })
+  .then(function(textoRespuesta) {
+    var respuesta;
+    try {
+      textoRespuesta = textoRespuesta.trim();
+      respuesta = JSON.parse(textoRespuesta);
+    } catch(e) {
+      console.error("Error parseando JSON:", e, "Texto recibido:", textoRespuesta);
+      alert("Error en la respuesta del servidor. Revise la consola.");
+      cancelarConfirmacion();
+      return;
+    }
+
+    if (respuesta.success) {
+      if (zonaBotones) {
+        zonaBotones.innerHTML =
+          '<p class="text-xs text-green-700 font-semibold text-center">✅ ' + respuesta.message + '</p>';
+      }
+      setTimeout(function() { cerrarModal(); }, 1500);
+    } else {
+      if (zonaBotones) {
+        zonaBotones.innerHTML =
+          '<p class="text-xs text-red-700 font-semibold text-center mb-2">⚠️ ' + respuesta.message + '</p>' +
+          '<button type="button" onclick="cancelarConfirmacion()" ' +
+            'class="bg-gray-400 hover:bg-gray-500 text-white font-semibold py-2 px-4 text-xs rounded">' +
+            'VOLVER' +
+          '</button>';
+      }
+    }
+  })
+  .catch(function(error) {
+    alert("Ocurrió un error de conexión al guardar los cambios.");
+    console.error(error);
+    cancelarConfirmacion();
+  });
+}
+
+// RECARGAR CONTENIDO DEL MODAL (auxiliar)
 function recargarDatosModal(codigo) {
-    fetch(`editar_usuario.php?codigo=${codigo}`)
-        .then((res) => res.text())
-        .then((html) => {
-            const contenedor = document.getElementById("contenidoModal");
-            if (contenedor) {
-                contenedor.innerHTML = html;
-            }
-        })
-        .catch((err) => console.error("Error al recargar modal:", err));
+  fetch("editar_usuario.php?codigo=" + codigo)
+    .then(function(res) { return res.text(); })
+    .then(function(html) {
+      var contenedor = document.getElementById("contenidoModal");
+      if (contenedor) { contenedor.innerHTML = html; }
+    })
+    .catch(function(err) { console.error("Error al recargar modal:", err); });
 }
