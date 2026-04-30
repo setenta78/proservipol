@@ -32,7 +32,7 @@ error_reporting(E_ALL & ~E_NOTICE);
                 <p class="text-sm text-gray-600 mt-2">Seleccione una opción para comenzar</p>
             </div>
             <!-- Tarjetas de Módulos (solo activos) -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-6">
                 <!-- Gestión de Usuarios -->
                 <a href="gestor_usuarios.php" class="block">
                     <div class="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 border border-green-200">
@@ -41,6 +41,16 @@ error_reporting(E_ALL & ~E_NOTICE);
                         </div>
                         <h4 class="font-semibold text-lg text-gray-800">Gestor de Usuarios</h4>
                         <p class="text-sm text-gray-600 mt-2">Administrar altas, bajas y perfiles de usuarios en PROSERVIPOL</p>
+                    </div>
+                </a>
+                <!-- Buscar Ingresos -->
+                <a href="buscar_ingresos_usuario.php" class="block">
+                    <div class="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 border border-green-200">
+                        <div class="text-green-600 mb-4">
+                            <i class="fas fa-sign-in-alt fa-3x"></i>
+                        </div>
+                        <h4 class="font-semibold text-lg text-gray-800">Buscar Ingresos</h4>
+                        <p class="text-sm text-gray-600 mt-2">Consultar historial de ingresos al sistema con filtros por fecha, unidad y funcionario</p>
                     </div>
                 </a>
                 <!-- Cámaras SAP -->

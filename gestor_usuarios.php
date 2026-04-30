@@ -143,7 +143,8 @@ require_once "queries/config.php";
 
                         $i = $offset + 1;
                         while ($row = mysql_fetch_array($result)) {
-                            echo "<tr class='text-center hover:bg-green-100 hover:font-bold transition-colors duration-200 cursor-pointer'>";
+                            // GACC-0007: ondblclick + select-none para evitar selección accidental de texto
+                            echo "<tr class='text-center hover:bg-green-100 hover:font-bold transition-colors duration-200 cursor-pointer select-none' ondblclick=\"abrirModal('{$row['FUN_CODIGO']}')\" title='Doble clic para editar'>";
                             echo "<td class='border px-4 py-2'>$i</td>";
                             echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['FUN_CODIGO']) . "</td>";
                             echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['FUN_NOMBRE'], ENT_QUOTES, 'UTF-8') . "</td>";
@@ -170,8 +171,8 @@ require_once "queries/config.php";
 	                                  </td>";
 	                            echo "</tr>";
 	                            $i++;
-	                        }                        
-						
+	                        }
+
                         echo "</tbody></table></div>";
 
                         // Paginacion
