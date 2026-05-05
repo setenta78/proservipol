@@ -37,8 +37,10 @@ async function cargarUsuario() {
 
     var funcionarioPersonal = await buscarFuncionarioPersonal();
 
+    // fetchAPI retorna null ante cualquier error (red, parseo, PHP warnings, etc.)
+    // cargarUsuario es el ÚNICO responsable de mostrar el mensaje al usuario
     if (!funcionarioPersonal) {
-        PSAlert.error("Error de comunicación con el servidor de personal.");
+        PSAlert.error("Error de comunicación con el servidor de personal.", "Ha ocurrido un error");
         textCodFuncionarioBusqueda.value = "";
         return;
     }
@@ -257,20 +259,39 @@ async function ejecutarCreacion(codFuncionario, codigoUnidad, tipoUsuario, passw
         try {
             data = JSON.parse(raw);
         } catch (parseError) {
-            console.error("Error al parsear JSON:", parseError);
-            PSAlert.error("Error en la respuesta del servidor. Revise la consola.");
+            // Respuesta corrompida (PHP emitió warnings antes del JSON)
+            // Conforme GACC-0010: un solo mensaje funcional de AutentificaTIC
+            console.error("Error al parsear JSON en crearUsuario:", parseError, "RAW:", raw);
+            PSAlert.error(
+                "En este momento existe un problema con el servicio de registro de usuarios de AutentificaTIC. Inténtelo más tarde.",
+                "Error de conexión con AutentificaTIC"
+            );
             return;
         }
 
         if (!response.ok || !data.success) {
             var errorMsg = "Error al crear usuario. Revisa los datos.";
-            if (data.message) {
+            if (data && data.message) {
                 errorMsg = data.message;
-            } else if (data.error) {
+            } else if (data && data.error) {
                 errorMsg = Object.values(data.error).join("<br>");
             }
             console.error("Error al crear usuario:", errorMsg);
-            PSAlert.error(errorMsg, "Error al registrar");
+
+            // Detectar si el error proviene específicamente de AutentificaTIC
+            var esErrorAutentificaTIC =
+                errorMsg.indexOf('AutentificaTIC') !== -1 ||
+                errorMsg.indexOf('Autentificatic') !== -1 ||
+                errorMsg.indexOf('autentificatic') !== -1;
+
+            if (esErrorAutentificaTIC) {
+                PSAlert.error(
+                    "En este momento existe un problema con el servicio de registro de usuarios de AutentificaTIC. Inténtelo más tarde.",
+                    "Error de conexión con AutentificaTIC"
+                );
+            } else {
+                PSAlert.error(errorMsg, "Error al registrar");
+            }
             return;
         }
 
@@ -280,12 +301,19 @@ async function ejecutarCreacion(codFuncionario, codigoUnidad, tipoUsuario, passw
         setTimeout(function() { location.reload(); }, 2800);
 
     } catch (err) {
-        console.error("Error de conexión:", err);
-        PSAlert.error("Error de conexión con el servidor. Verifique su conexión a internet.");
+        // Error de red puro — no llegó respuesta del servidor
+        console.error("Error de conexión en ejecutarCreacion:", err);
+        PSAlert.error(
+            "En este momento existe un problema con el servicio de registro de usuarios de AutentificaTIC. Inténtelo más tarde.",
+            "Error de conexión con AutentificaTIC"
+        );
     }
 }
 
 // ── FETCH API ────────────────────────────────────────────────
+// REGLA: fetchAPI NUNCA muestra PSAlert.
+// Solo registra errores técnicos en consola y retorna null.
+// El llamador (cargarUsuario) es el único responsable de mostrar mensajes al usuario.
 
 async function fetchAPI(url) {
     try {
@@ -298,8 +326,8 @@ async function fetchAPI(url) {
         try {
             data = JSON.parse(text);
         } catch (parseError) {
+            // Solo log técnico — NO llamar PSAlert aquí
             console.error("Error al parsear JSON:", parseError, "Texto recibido:", text);
-            PSAlert.error("Error en la respuesta del servidor. Formato de datos incorrecto.");
             return null;
         }
 
@@ -313,8 +341,8 @@ async function fetchAPI(url) {
         return data;
 
     } catch (networkError) {
+        // Solo log técnico — NO llamar PSAlert aquí
         console.error("Error de red en fetchAPI:", networkError);
-        PSAlert.error("Error de conexión con el servidor.");
         return null;
     }
 }
