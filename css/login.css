@@ -1,7 +1,5 @@
 /**
- * ESTILOS PARA PÁGINA DE LOGIN - PROSERVIPOL v4.0
- * @author Ingeniero C.P.R. Denis Quezada Lemus
- * @date 2025
+ * ESTILOS PARA PÁGINA DE LOGIN - PROSERVIPOL v4.4
  */
 
 /* ========== RESET Y BASE ========== */
@@ -42,7 +40,7 @@ body {
     background: white;
 }
 
-/* Logo */
+/* Logo superior formulario */
 .logo {
     text-align: center;
     margin-bottom: 0.5rem;
@@ -213,16 +211,56 @@ body {
     color: #10b981;
 }
 
-/* ========== IMAGEN DE FONDO ========== */
+/* ========== COLUMNA DERECHA: FONDO + CAPAS ========== */
 .login-image {
+    position: relative;
     display: none;
-    background-image: url('../img/fondo-login.svg');
+    background-color: #1b3a6b;
+    background-image: none;
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
     width: 100%;
     flex: 1;
     min-height: 100vh;
+    transition: opacity 0.5s ease;
+    opacity: 0;
+}
+
+.login-image.bg-cargada {
+    opacity: 1;
+}
+
+/* Capas sobre el fondo */
+.bg-layer {
+    position: absolute;
+    width: auto;
+    pointer-events: none;
+}
+
+/* Carabineros arriba izquierda con ligera transparencia */
+.bg-carabineros {
+    top: 24px;
+    left: 32px;
+    height: 240px;          /* ajusta según se vea */
+    opacity: 0.9;           /* “un poco” de transparencia */
+}
+
+/* Logos inferiores a la misma altura */
+.bg-logo-dcgs,
+.bg-logo-aniversario {
+    bottom: 24px;           /* misma línea de base */
+    height: 80px;           /* misma altura visual */
+}
+
+/* Izquierda: DCGS */
+.bg-logo-dcgs {
+    left: 32px;
+}
+
+/* Derecha: Aniversario */
+.bg-logo-aniversario {
+    right: 32px;
 }
 
 /* ========== LOADING SPINNER ========== */

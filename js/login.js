@@ -1,11 +1,12 @@
 /**
  * SISTEMA DE APLICACIONES DE PROSERVIPOL
  * Lógica de Autenticación con Autentificatic API - Denis Quezada Lemus
- * @version 4.2
- * @date 2025
+ * @version 4.3
+ * @date 2026
  * Mejoras: 
  * - Validación completa de RUT chileno con dígito verificador K
  * - SEGURIDAD: Ocultamiento de detalles técnicos en mensajes de error (Códigos de perfil)
+ * - Mensajes de error reemplazados por PSAlert (modales del sistema)
  */
 
 // ========== CONFIGURACIÓN ========== 
@@ -31,7 +32,6 @@ var ERROR_MESSAGES = {
     NETWORK_ERROR: 'Error de conexión. Verifique su red e intente nuevamente.',
     UNKNOWN_ERROR: 'Error desconocido. Intente nuevamente más tarde.',
     SESSION_ERROR: 'Error al guardar la sesión. Contacte al administrador.',
-    // Nuevo mensaje genérico para errores de permisos
     PERMISSION_DENIED_GENERIC: 'Acceso denegado. Su usuario no está autorizado para utilizar este sistema.'
 };
 
@@ -39,8 +39,6 @@ var ERROR_MESSAGES = {
 
 /**
  * Limpia el RUT eliminando puntos, guiones y espacios
- * @param {string} rut - RUT a limpiar
- * @returns {string} RUT limpio en mayúsculas
  */
 function limpiarRUT(rut) {
     return rut.replace(/\./g, '').replace(/-/g, '').replace(/\s/g, '').trim().toUpperCase();
@@ -48,14 +46,11 @@ function limpiarRUT(rut) {
 
 /**
  * Calcula el dígito verificador de un RUT chileno
- * @param {string} rutSinDV - RUT sin dígito verificador (solo números)
- * @returns {string} Dígito verificador calculado (0-9 o K)
  */
 function calcularDV(rutSinDV) {
     var suma = 0;
     var multiplicador = 2;
     
-    // Recorrer de derecha a izquierda
     for (var i = rutSinDV.length - 1; i >= 0; i--) {
         suma += parseInt(rutSinDV.charAt(i)) * multiplicador;
         multiplicador = multiplicador === 7 ? 2 : multiplicador + 1;
@@ -63,7 +58,6 @@ function calcularDV(rutSinDV) {
     
     var dvEsperado = 11 - (suma % 11);
     
-    // Casos especiales
     if (dvEsperado === 11) return '0';
     if (dvEsperado === 10) return 'K';
     return dvEsperado.toString();
@@ -71,39 +65,27 @@ function calcularDV(rutSinDV) {
 
 /**
  * Valida RUT chileno con dígito verificador completo (incluye K)
- * Ejemplos válidos: 12345678-9, 12345678-K, 12345678K, 123456789
- * @param {string} rut - RUT a validar
- * @returns {boolean} true si el RUT es válido
  */
 function validarRUT(rut) {
     if (!rut || typeof rut !== 'string') {
         return false;
     }
     
-    // Limpiar el RUT
     var rutLimpio = limpiarRUT(rut);
-    
-    // Validar formato: 7-8 dígitos + 1 dígito verificador (0-9 o K)
     var regex = /^[0-9]{7,8}[0-9K]$/;
     if (!regex.test(rutLimpio)) {
         return false;
     }
     
-    // Separar cuerpo y dígito verificador
     var cuerpo = rutLimpio.slice(0, -1);
     var dvIngresado = rutLimpio.slice(-1);
-    
-    // Calcular dígito verificador esperado
     var dvEsperado = calcularDV(cuerpo);
     
-    // Comparar
     return dvIngresado === dvEsperado;
 }
 
 /**
  * Formatea un RUT al formato chileno estándar: 12.345.678-9
- * @param {string} rut - RUT a formatear
- * @returns {string} RUT formateado
  */
 function formatearRUT(rut) {
     var rutLimpio = limpiarRUT(rut);
@@ -115,7 +97,6 @@ function formatearRUT(rut) {
     var cuerpo = rutLimpio.slice(0, -1);
     var dv = rutLimpio.slice(-1);
     
-    // Agregar puntos cada 3 dígitos de derecha a izquierda
     cuerpo = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     
     return cuerpo + '-' + dv;
@@ -123,30 +104,23 @@ function formatearRUT(rut) {
 
 /**
  * Permite solo números y la letra K en el input de RUT
- * @param {Event} event - Evento de teclado
- * @returns {boolean} true si el carácter es válido
  */
 function validarSoloNumerosYK(event) {
     var charCode = (event.which) ? event.which : event.keyCode;
     var char = String.fromCharCode(charCode).toUpperCase();
     
-    // Permitir números (0-9)
     if (charCode >= 48 && charCode <= 57) {
         return true;
     }
     
-    // Permitir K o k (solo si no existe ya una K en el input)
     if (char === 'K') {
         var input = event.target;
         var valor = input.value.toUpperCase();
-        
-        // No permitir más de una K
         if (valor.indexOf('K') === -1) {
             return true;
         }
     }
     
-    // Bloquear todo lo demás
     event.preventDefault();
     return false;
 }
@@ -189,21 +163,32 @@ function toggleFormulario(disabled) {
     }
 }
 
+/**
+ * Muestra un mensaje de error usando PSAlert (modal del sistema).
+ * - PSAlert.advertencia() para RUT inválido, contraseña caducada y campos vacíos.
+ * - PSAlert.error() para credenciales incorrectas, cuenta inactiva, sin acceso.
+ */
 function mostrarError(mensaje) {
-    alert('❌ ' + mensaje);
+    var esAdvertencia =
+        mensaje.indexOf('no es válido') !== -1 ||
+        mensaje.indexOf('caducado') !== -1  ||
+        mensaje.indexOf('ingrese RUT') !== -1;
+
+    if (esAdvertencia) {
+        PSAlert.advertencia(mensaje, 'Atención');
+    } else {
+        PSAlert.error(mensaje, 'Acceso denegado');
+    }
 }
 
 /**
  * Obtiene el mensaje de error adecuado, filtrando información sensible
- * @param {Object} errorData - Objeto de error recibido
- * @returns {string} Mensaje de error seguro para mostrar al usuario
  */
 function obtenerMensajeError(errorData) {
     if (!errorData) return ERROR_MESSAGES.UNKNOWN_ERROR;
     
     var mensajeOriginal = '';
 
-    // 1. Extraer el mensaje original de diversas fuentes posibles
     if (errorData.errors) {
         var errors = errorData.errors;
         
@@ -219,13 +204,11 @@ function obtenerMensajeError(errorData) {
         mensajeOriginal = errorData.message;
     }
     
-    // Si no hay mensaje original, usar desconocido
     if (!mensajeOriginal) {
         return ERROR_MESSAGES.UNKNOWN_ERROR;
     }
 
-    // 2. FILTRO DE SEGURIDAD: Detectar si el mensaje revela información interna
-    // Buscamos palabras clave como "perfil", "90", "310", "Mesa de Ayuda", "Administrador"
+    // FILTRO DE SEGURIDAD: ocultar mensajes que revelen información interna
     var mensajeLower = mensajeOriginal.toLowerCase();
     
     if (mensajeLower.indexOf('perfil') !== -1 || 
@@ -235,12 +218,10 @@ function obtenerMensajeError(errorData) {
         mensajeLower.indexOf('administrador') !== -1 ||
         mensajeLower.indexOf('permisos') !== -1) {
         
-        // Si detecta información sensible, devolver mensaje genérico
         console.warn('⚠️ Mensaje de error original ocultado por seguridad:', mensajeOriginal);
         return ERROR_MESSAGES.PERMISSION_DENIED_GENERIC;
     }
 
-    // 3. Si es seguro, devolver el mensaje original (o uno mapeado si es muy técnico)
     return mensajeOriginal;
 }
 
@@ -375,7 +356,6 @@ function iniciarSesion() {
         return;
     }
     
-    // Limpiar RUT para enviar sin puntos ni guiones
     var rutLimpio = limpiarRUT(rut);
     
     toggleFormulario(true);
@@ -402,11 +382,9 @@ function iniciarSesion() {
             ocultarCarga();
             toggleFormulario(false);
             
-            // Aquí se aplica el filtro de seguridad
             var mensaje = obtenerMensajeError(error);
             mostrarError(mensaje);
             
-            // El error completo se mantiene en consola solo para debug del desarrollador
             console.error('Error de autenticación (detalle interno):', error);
         });
 }
@@ -423,11 +401,9 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-    // Validar solo números y K en RUT
     if (rutInput) {
         rutInput.addEventListener('keypress', validarSoloNumerosYK);
         
-        // Opcional: Formatear RUT automáticamente al escribir
         rutInput.addEventListener('blur', function() {
             var valor = rutInput.value.trim();
             if (valor && validarRUT(valor)) {
@@ -436,13 +412,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Click en botón de login
     btnLogin.addEventListener('click', function(e) {
         e.preventDefault();
         iniciarSesion();
     });
     
-    // Enter en el formulario
     form.addEventListener('keypress', function(e) {
         if (e.keyCode === 13 || e.which === 13) {
             e.preventDefault();
@@ -450,7 +424,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    console.log('✅ Sistema de login inicializado correctamente (v4.2 - Seguridad Mejorada)');
+    console.log('✅ Sistema de login inicializado correctamente (v4.3 - PSAlert integrado)');
     console.log('✅ Validación completa de RUT con dígito verificador K habilitada');
     console.log('✅ Filtrado de mensajes de error sensibles activado');
 });

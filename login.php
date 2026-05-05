@@ -1,9 +1,9 @@
 <?php
 /**
  * SISTEMA DE APLICACIONES DE PROSERVIPOL
- * Página de Inicio de Sesión - Versión 4.0
+ * Página de Inicio de Sesión - Versión 4.4
  * @compatibility PHP 5.1.2 + MySQL 5.0.77
- * @author Ingeniero C.P.R. Denis Quezada Lemus
+ * @autor Ingeniero C.P.R. Denis Quezada Lemus
  * @date 2025
  */
 error_reporting(E_ALL);
@@ -24,6 +24,11 @@ if (isset($_SESSION['access_token'])) {
     <title>Iniciar Sesión - PROSERVIPOL</title>
     <!-- Favicon -->
     <link rel="shortcut icon" href="img/logo.png">
+    <!-- Precarga de imágenes (no bloquean render) -->
+    <link rel="preload" as="image" href="img/fondo-login.webp" type="image/webp">
+    <link rel="preload" as="image" href="img/logo_aniversario.png" type="image/png">
+    <link rel="preload" as="image" href="img/carabineros.png" type="image/png">
+    <link rel="preload" as="image" href="img/logo_dcgs.png" type="image/png">
     <!-- Estilos -->
     <link rel="stylesheet" href="css/login.css">
     <!-- Font Awesome -->
@@ -33,7 +38,7 @@ if (isset($_SESSION['access_token'])) {
     <div class="login-container">
         <!-- ========== FORMULARIO DE LOGIN ========== -->
         <div class="login-form">
-            <!-- Logo -->
+            <!-- Logo superior del sistema -->
             <div class="logo">
                 <img src="img/logobanner.png" alt="Carabineros de Chile">
             </div>
@@ -96,7 +101,7 @@ if (isset($_SESSION['access_token'])) {
                     <p class="text-xs">
                         I.P. Mesa de Ayuda:
                     </p>
-					<p class="text-xs">
+                    <p class="text-xs">
                         20828 - 20843 - 20844
                     </p>
                     <p class="text-xs">
@@ -110,10 +115,55 @@ if (isset($_SESSION['access_token'])) {
                 </div>
             </div>
         </div>
-        <!-- ========== IMAGEN DE FONDO ========== -->
-        <div class="login-image"></div>
+
+        <!-- ========== COLUMNA DERECHA: FONDO + ELEMENTOS ========== -->
+        <div class="login-image" id="login-image-bg">
+            <!-- Carabineros arriba izquierda, con ligera transparencia -->
+            <img src="img/carabineros.png" 
+                 alt="Carabineros de Chile" 
+                 class="bg-layer bg-carabineros">
+            <!-- Logos inferiores: izquierda DCGS, derecha Aniversario -->
+            <img src="img/logo_dcgs.png" 
+                 alt="D.C.G.S.I." 
+                 class="bg-layer bg-logo-dcgs">
+            <img src="img/logo_aniversario.png" 
+                 alt="Aniversario Carabineros de Chile" 
+                 class="bg-layer bg-logo-aniversario">
+        </div>
     </div>
+
     <!-- Scripts -->
+    <script src="js/proservipol_alerts.js"></script>
     <script src="js/login.js"></script>
+
+    <!-- Carga diferida de imagen de fondo -->
+    <script>
+    (function() {
+        var mediaQuery = window.matchMedia('(min-width: 1024px)');
+
+        function cargarFondo() {
+            if (!mediaQuery.matches) return; // no cargar en móvil
+
+            var bg = document.getElementById('login-image-bg');
+            if (!bg) return;
+
+            var img = new Image();
+            img.onload = function() {
+                bg.style.backgroundImage = "url('img/fondo-login.webp')";
+                bg.classList.add('bg-cargada');
+            };
+            img.onerror = function() {
+                bg.classList.add('bg-cargada');
+            };
+            img.src = 'img/fondo-login.webp';
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', cargarFondo);
+        } else {
+            cargarFondo();
+        }
+    })();
+    </script>
 </body>
 </html>
