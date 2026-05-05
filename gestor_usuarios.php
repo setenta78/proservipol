@@ -226,6 +226,7 @@ require_once "queries/config.php";
             </div>
         </div>
 
+		<script src="js/proservipol_alerts.js"></script>
         <script src="js/jquery-1.12.4.js"></script>
         <script src="js/nuevo_usuario.js"></script>
         <script src="js/modal_editar.js"></script>
@@ -233,6 +234,7 @@ require_once "queries/config.php";
         <script src="js/modal_nuevo.js"></script>
         <script src="js/modal_busquedaParametrica.js"></script>
         <script src="js/modal_ingresos.js"></script>
+		
 
         <script>
             $(document).ready(function() {

@@ -13,3 +13,4 @@ require_once 'middleware_auth.php';
         </div>
     </div>
 </nav>
+<script src="js/proservipol_alerts.js"></script>
