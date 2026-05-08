@@ -1,10 +1,14 @@
 <?php
 session_start();
-require_once 'middleware_auth.php';
+
+// Raíz del sistema según VirtualHost
+$rootPath = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . '/';
+
+require_once $rootPath . 'middleware_auth.php';
 error_reporting(E_ALL & ~E_NOTICE);
-require_once "queries/config.php";
-require_once "queries/general_queries.php";
-require_once "queries/editar_queries.php";
+require_once $rootPath . 'queries/config.php';
+require_once $rootPath . 'queries/general_queries.php';
+require_once $rootPath . 'queries/editar_queries.php';
 
 $codigo = isset($_GET['codigo']) ? mysql_real_escape_string($_GET['codigo'], $link) : '';
 if (!$codigo) { die("Codigo de usuario no proporcionado."); }
@@ -24,7 +28,7 @@ $accesos  = obtenerUltimosAccesos($codigo);
 
     <div class="flex gap-2 border rounded-lg overflow-hidden items-center">
       <div class="w-1/4 flex items-start justify-center p-2">
-        <img src="img/default_user.png" alt="Foto"
+        <img src="/img/default_user.png" alt="Foto"
              class="w-32 h-32 object-cover rounded-full border shadow">
       </div>
       <div class="w-3/4 grid grid-cols-2 border-l">
@@ -158,4 +162,4 @@ $accesos  = obtenerUltimosAccesos($codigo);
   </div>
 
 </div>
-<!-- SIN etiqueta <script> — las funciones están en js/modal_editar.js -->
+<!-- Las funciones JS están en /app/gestor-usuarios/js/modal_editar.js -->

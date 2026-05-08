@@ -88,7 +88,7 @@ function guardarCambios() {
     datos.append("unidad",   unidad);
     datos.append("password", password);
 
-    fetch("queries/editar_queries.php", {
+    fetch("/queries/editar_queries.php", {
         method: "POST",
         body: datos
     })

@@ -1,8 +1,12 @@
 <?php
 session_start();
-require_once 'middleware_auth.php';
+
+// Raíz del sistema según VirtualHost
+$rootPath = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . '/';
+
+require_once $rootPath . 'middleware_auth.php';
 error_reporting(E_ALL & ~E_NOTICE);
-require_once "queries/config.php";
+require_once $rootPath . 'queries/config.php';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -11,29 +15,39 @@ require_once "queries/config.php";
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <link rel="shortcut icon" href="img/logo.png">
+    <link rel="shortcut icon" href="/img/logo.png">
     <title>Sistema de Administracion de usuarios de PROSERVIPOL</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 
 <body class="bg-gray-100 text-gray-700">
-    <?php include "header.php"; ?>
+    <?php include $rootPath . 'header.php'; ?>
 
     <div class="flex">
-        <?php include "nav.php"; ?>
+        <?php include $rootPath . 'nav.php'; ?>
 
         <div class="ml-64 w-full mt-20 p-5">
-            <h3 class="text-center text-green-800 font-semibold mt-5">SISTEMA DE ADMINISTRACION DE USUARIOS DE PROSERVIPOL</h3>
+            <h3 class="text-center text-green-800 font-semibold mt-5">
+                SISTEMA DE ADMINISTRACION DE USUARIOS DE PROSERVIPOL
+            </h3>
             <hr class="my-2 border-gray-400">
 
             <div class="flex justify-between items-center mb-4 flex-wrap gap-4 px-4">
-                <button onclick="abrirModalNuevo()" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 text-xs rounded">REGISTRAR NUEVO USUARIO</button>
+                <button onclick="abrirModalNuevo()" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 text-xs rounded">
+                    REGISTRAR NUEVO USUARIO
+                </button>
                 <form action="" method="GET" class="flex w-full sm:w-auto max-w-lg items-center">
-                    <input type="text" name="search" placeholder="Ingrese codigo, nombre, apellido, unidad, perfil, etc." class="w-full sm:w-96 p-2 border rounded-l-lg focus:outline-none focus:ring focus:border-green-500 text-sm" value="<?php echo isset($_GET['search']) ? htmlspecialchars($_GET['search'], ENT_COMPAT) : ''; ?>">
-                    <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-r-lg text-sm hover:bg-green-700">BUSCAR</button>
+                    <input type="text" name="search" placeholder="Ingrese codigo, nombre, apellido, unidad, perfil, etc."
+                           class="w-full sm:w-96 p-2 border rounded-l-lg focus:outline-none focus:ring focus:border-green-500 text-sm"
+                           value="<?php echo isset($_GET['search']) ? htmlspecialchars($_GET['search'], ENT_COMPAT) : ''; ?>">
+                    <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-r-lg text-sm hover:bg-green-700">
+                        BUSCAR
+                    </button>
                 </form>
-                <button onclick="abrirModalBusquedaParametrica()" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 text-xs rounded">BUSQUEDA PARAMETRICA</button>
+                <button onclick="abrirModalBusquedaParametrica()" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 text-xs rounded">
+                    BUSQUEDA PARAMETRICA
+                </button>
             </div>
 
             <div class="w-full mx-auto">
@@ -73,7 +87,7 @@ require_once "queries/config.php";
                 $new_order = ($order === 'asc') ? 'desc' : 'asc';
 
                 // Incluir funciones de consulta
-                require_once "queries/usuarios_listado.php";
+                require_once $rootPath . "queries/usuarios_listado.php";
 
                 // ---------------------------
                 // FIX: query_params SIN "page" para evitar duplicado en URL de paginacion
@@ -143,7 +157,6 @@ require_once "queries/config.php";
 
                         $i = $offset + 1;
                         while ($row = mysql_fetch_array($result)) {
-                            // GACC-0007: ondblclick + select-none para evitar selección accidental de texto
                             echo "<tr class='text-center hover:bg-green-100 hover:font-bold transition-colors duration-200 cursor-pointer select-none' ondblclick=\"abrirModal('{$row['FUN_CODIGO']}')\" title='Doble clic para editar'>";
                             echo "<td class='border px-4 py-2'>$i</td>";
                             echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['FUN_CODIGO']) . "</td>";
@@ -152,26 +165,26 @@ require_once "queries/config.php";
                             echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['FUN_APELLIDOPATERNO'], ENT_QUOTES, 'UTF-8') . "</td>";
                             echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['FUN_APELLIDOMATERNO'], ENT_QUOTES, 'UTF-8') . "</td>";
                             echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['GRA_DESCRIPCION']) . "</td>";
-							echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['CARGO']) . "</td>";
-							echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['UNI_DESCRIPCION']) . "</td>";
-							echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['TUS_DESCRIPCION']) . "</td>";
-							echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['CAPACITACION']) . "</td>";
-							echo "<td class='border px-4 py-2'>
-	                                    <div class='flex items-center gap-2'>
-	                                        <button
-	                                            onclick=\"abrirModal('{$row['FUN_CODIGO']}')\"
-	                                            class='text-blue-600 hover:text-blue-800'
-	                                            title='Editar'>
-	                                            <i class='fas fa-edit fa-lg'></i>
-	                                        </button>
-	                                        <button type='button' onclick=\"confirmarEliminarAjax('{$row['FUN_CODIGO']}')\" class='text-red-600 hover:text-red-800' title='Eliminar'>
-	                                            <i class='fas fa-trash-alt fa-lg'></i>
-	                                        </button>
-	                                    </div>
-	                                  </td>";
-	                            echo "</tr>";
-	                            $i++;
-	                        }
+                            echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['CARGO']) . "</td>";
+                            echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['UNI_DESCRIPCION']) . "</td>";
+                            echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['TUS_DESCRIPCION']) . "</td>";
+                            echo "<td class='border px-4 py-2'>" . htmlspecialchars($row['CAPACITACION']) . "</td>";
+                            echo "<td class='border px-4 py-2'>
+                                    <div class=\"flex items-center gap-2\">
+                                        <button
+                                            onclick=\"abrirModal('{$row['FUN_CODIGO']}')\"
+                                            class=\"text-blue-600 hover:text-blue-800\"
+                                            title=\"Editar\">
+                                            <i class=\"fas fa-edit fa-lg\"></i>
+                                        </button>
+                                        <button type=\"button\" onclick=\"confirmarEliminarAjax('{$row['FUN_CODIGO']}')\" class=\"text-red-600 hover:text-red-800\" title=\"Eliminar\">
+                                            <i class=\"fas fa-trash-alt fa-lg\"></i>
+                                        </button>
+                                    </div>
+                                  </td>";
+                            echo "</tr>";
+                            $i++;
+                        }
 
                         echo "</tbody></table></div>";
 
@@ -201,6 +214,7 @@ require_once "queries/config.php";
             </div>
         </div>
 
+        <!-- Modales -->
         <div id="modalEditar" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50 overflow-y-auto">
             <div id="modalContenido" class="bg-white rounded-lg shadow-lg w-11/12 max-w-7xl p-6 relative transform transition-all duration-300 scale-95 opacity-0 max-h-[90vh]">
                 <button onclick="cerrarModal()" class="absolute top-3 right-3 text-gray-600 hover:text-gray-900 text-2xl font-bold">&times;</button>
@@ -209,6 +223,7 @@ require_once "queries/config.php";
                 </div>
             </div>
         </div>
+
         <div id="modalNuevo" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50 overflow-y-auto">
             <div id="modalContenidoNuevo" class="bg-white rounded-lg shadow-lg w-11/12 max-w-7xl p-6 relative transform transition-all duration-300 scale-95 opacity-0 max-h-[90vh]">
                 <button onclick="cerrarModal()" class="absolute top-3 right-3 text-gray-600 hover:text-gray-900 text-2xl font-bold">&times;</button>
@@ -217,6 +232,7 @@ require_once "queries/config.php";
                 </div>
             </div>
         </div>
+
         <div id="modalBusquedaParametrica" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50 overflow-y-auto">
             <div id="modalContenidoBusqueda" class="bg-white rounded-lg shadow-lg w-11/12 max-w-7xl p-6 relative transform transition-all duration-300 scale-95 opacity-0 max-h-[90vh]">
                 <button onclick="cerrarModal()" class="absolute top-3 right-3 text-gray-600 hover:text-gray-900 text-2xl font-bold">&times;</button>
@@ -226,15 +242,17 @@ require_once "queries/config.php";
             </div>
         </div>
 
-		<script src="js/proservipol_alerts.js"></script>
-        <script src="js/jquery-1.12.4.js"></script>
-        <script src="js/nuevo_usuario.js"></script>
-        <script src="js/modal_editar.js"></script>
-        <script src="js/modal_eliminar.js"></script>
-        <script src="js/modal_nuevo.js"></script>
-        <script src="js/modal_busquedaParametrica.js"></script>
-        <script src="js/modal_ingresos.js"></script>
-		
+        <!-- JS: usar rutas absolutas desde raíz -->
+        <script src="/js/proservipol_alerts.js"></script>
+        <script src="/js/jquery-1.12.4.js"></script>
+
+        <!-- Cuando movamos los JS del módulo, estos estarán en /app/gestor-usuarios/js/ -->
+        <script src="/app/gestor-usuarios/js/nuevo_usuario.js"></script>
+        <script src="/app/gestor-usuarios/js/modal_editar.js"></script>
+        <script src="/app/gestor-usuarios/js/modal_eliminar.js"></script>
+        <script src="/app/gestor-usuarios/js/modal_nuevo.js"></script>
+        <script src="/app/gestor-usuarios/js/modal_busquedaParametrica.js"></script>
+        <script src="/app/gestor-usuarios/js/modal_ingresos.js"></script>
 
         <script>
             $(document).ready(function() {
@@ -243,7 +261,7 @@ require_once "queries/config.php";
                     var resultDropdown = $(this).siblings(".result");
 
                     if (inputVal.length) {
-                        $.get("queries/buscar_unidad.php", { term: inputVal })
+                        $.get("/queries/buscar_unidad.php", { term: inputVal })
                             .done(function(data) {
                                 resultDropdown.html(data);
                             });
@@ -266,7 +284,7 @@ require_once "queries/config.php";
 
             document.addEventListener("buscarUsuarios", function(e) {
                 const filtros = e.detail;
-                fetch("buscar_usuario.php", {
+                fetch("/buscar_usuario.php", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(filtros)

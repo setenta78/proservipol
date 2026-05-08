@@ -4,8 +4,12 @@ session_start();
 // ============================================
 // COMPATIBILIDAD PHP 5.1.2: json_encode/decode
 // ============================================
+
+// Raíz del sistema según VirtualHost
+$rootPath = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . '/';
+
 if (!function_exists('json_decode')) {
-    require_once('../../inc/Services_JSON.php');
+    require_once($rootPath . 'inc/Services_JSON.php');
     function json_decode($content, $assoc = false) {
         if ($assoc) {
             $json = new Services_JSON(SERVICES_JSON_LOOSE_TYPE);
@@ -17,7 +21,7 @@ if (!function_exists('json_decode')) {
 }
 
 if (!function_exists('json_encode')) {
-    require_once('../../inc/Services_JSON.php');
+    require_once($rootPath . 'inc/Services_JSON.php');
     function json_encode($content) {
         $json = new Services_JSON();
         return $json->encode($content);

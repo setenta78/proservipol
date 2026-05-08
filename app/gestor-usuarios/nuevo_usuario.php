@@ -1,7 +1,12 @@
 <?php
 error_reporting(E_ALL & ~E_NOTICE);
-require_once "queries/config.php";
-require_once "queries/general_queries.php";
+
+// Raíz del sistema según VirtualHost
+$rootPath = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . '/';
+
+require_once $rootPath . 'queries/config.php';
+require_once $rootPath . 'queries/general_queries.php';
+
 $perfiles = obtenerPerfiles();
 $unidades = obtenerUnidades();
 ?>
@@ -64,8 +69,8 @@ $unidades = obtenerUnidades();
                             <option value="" disabled selected>Seleccionar</option>
                             <?php
                             foreach ($perfiles as $perfil) {
-                                $selected = ($perfil['TUS_CODIGO'] == $funcionario['TUS_CODIGO']) ? 'selected' : '';
-                                echo '<option value="' . htmlspecialchars($perfil['TUS_CODIGO']) . '" ' . $selected . '>' . htmlspecialchars($perfil['TUS_DESCRIPCION']) . '</option>';
+                                // $funcionario no existe en esta vista, así que no se marca ninguno como selected
+                                echo '<option value="' . htmlspecialchars($perfil['TUS_CODIGO']) . '">' . htmlspecialchars($perfil['TUS_DESCRIPCION']) . '</option>';
                             }
                             ?>
                         </select>
@@ -86,9 +91,7 @@ $unidades = obtenerUnidades();
                 <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-5 rounded-md shadow-sm text-sm">
                     CREAR USUARIO
                 </button>
-
             </div>
+        </form>
     </div>
-    </form>
-</div>
 </div>

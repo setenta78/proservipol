@@ -5,7 +5,7 @@
 
 var paginaActual = 1;
 var totalPaginas = 1;
-var datosCache   = [];  // Guarda últimos resultados para exportar CSV
+var datosCache   = [];  // Guarda últimos resultados para exportar
 
 // REALIZAR BÚSQUEDA
 function realizarBusqueda(pagina) {
@@ -39,7 +39,7 @@ function realizarBusqueda(pagina) {
     formData.append('unidad_filter', unidad_filter);
     formData.append('pagina',        pagina);
 
-    fetch('queries/buscar_ingresos_queries.php', {
+    fetch('/queries/buscar_ingresos_queries.php', {
         method: 'POST',
         body: formData
     })
@@ -77,6 +77,10 @@ function realizarBusqueda(pagina) {
         mostrarTabla();
 
         document.getElementById('btn-exportar').classList.remove('hidden');
+        var btnExcel = document.getElementById('btn-exportar-excel');
+        if (btnExcel) {
+            btnExcel.classList.remove('hidden');
+        }
     })
     .catch(function(err) {
         mostrarCargando(false);
@@ -88,7 +92,6 @@ function realizarBusqueda(pagina) {
 // FORMATEAR FECHA de YYYY-MM-DD HH:MM:SS a DD-MM-YYYY HH:MM:SS
 function formatearFecha(fechaStr) {
     if (!fechaStr) return '<span class="text-gray-400">—</span>';
-    // Formato esperado: "2026-04-30 00:01:35"
     var partes = fechaStr.split(' ');
     if (partes.length < 1) return htmlEscape(fechaStr);
     var fecha = partes[0].split('-');
@@ -106,14 +109,12 @@ function renderizarTabla(datos, total, pagina, porPagina) {
     for (var i = 0; i < datos.length; i++) {
         var d       = datos[i];
         var num     = inicio + i;
-        //var termino = d.US_FECHAHORA_TERMINO ? formatearFecha(d.US_FECHAHORA_TERMINO) : '<span class="text-gray-400">—</span>';
-        var evento  = d.US_EVENTO            ? htmlEscape(d.US_EVENTO)                : '<span class="text-gray-400">—</span>';
+        var evento  = d.US_EVENTO ? htmlEscape(d.US_EVENTO) : '<span class="text-gray-400">—</span>';
 
         tbody.innerHTML +=
-            '<tr class="text-center hover:bg-green-50 transition-colors duration-150">' +
+            '<tr class="text-center hover:bg-green-50 transition-colors duración-150">' +
                 '<td class="border px-3 py-1">'                   + num                                  + '</td>' +
                 '<td class="border px-3 py-1">'                   + formatearFecha(d.US_FECHAHORA_INICIO) + '</td>' +
-                //'<td class="border px-3 py-1">'                   + termino                              + '</td>' +
                 '<td class="border px-3 py-1 font-mono">'         + htmlEscape(d.FUN_CODIGO)              + '</td>' +
                 '<td class="border px-3 py-1">'                   + htmlEscape(d.FUN_RUT)                 + '</td>' +
                 '<td class="border px-3 py-1 text-left">'         + htmlEscape(d.NOMBRE_COMPLETO)         + '</td>' +
@@ -155,7 +156,7 @@ function renderizarPaginacion(pagina, total) {
 function limpiarFiltros() {
     document.getElementById('fecha_desde').value   = '';
     document.getElementById('fecha_hasta').value   = '';
-    document.getElementById('busqueda').value       = '';
+    document.getElementById('busqueda').value      = '';
     document.getElementById('unidad_filter').value = '';
 
     ocultarTabla();
@@ -166,6 +167,11 @@ function limpiarFiltros() {
     estado.textContent = '';
 
     document.getElementById('btn-exportar').classList.add('hidden');
+    var btnExcel = document.getElementById('btn-exportar-excel');
+    if (btnExcel) {
+        btnExcel.classList.add('hidden');
+    }
+
     document.getElementById('tabla-cuerpo').innerHTML = '';
     document.getElementById('paginacion').innerHTML   = '';
     datosCache = [];
@@ -179,7 +185,7 @@ function exportarCSV() {
     }
 
     var cabecera = [
-        'Fecha Ingreso', /*'Fecha Termino',*/ 'Codigo', 'RUT',
+        'Fecha Ingreso', 'Codigo', 'RUT',
         'Nombre Completo', 'Grado', 'Unidad', 'Perfil', 'IP', 'Evento'
     ];
 
@@ -189,7 +195,6 @@ function exportarCSV() {
         var d    = datosCache[i];
         var fila = [
             csvEscape(d.US_FECHAHORA_INICIO),
-            //csvEscape(d.US_FECHAHORA_TERMINO || ''),
             csvEscape(d.FUN_CODIGO),
             csvEscape(d.FUN_RUT),
             csvEscape(d.NOMBRE_COMPLETO),
@@ -208,6 +213,52 @@ function exportarCSV() {
     var a         = document.createElement('a');
     a.href        = url;
     a.download    = 'ingresos_proservipol_' + fechaHoy() + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// EXPORTAR EXCEL (versión rápida basado en HTML)
+function exportarExcel() {
+    if (!datosCache || datosCache.length === 0) {
+        alert('No hay datos para exportar.');
+        return;
+    }
+
+    var cabecera = [
+        'Fecha Ingreso', 'Codigo', 'RUT',
+        'Nombre Completo', 'Grado', 'Unidad', 'Perfil', 'IP', 'Evento'
+    ];
+
+    var html = '<table border="1"><thead><tr>';
+    for (var i = 0; i < cabecera.length; i++) {
+        html += '<th>' + cabecera[i] + '</th>';
+    }
+    html += '</tr></thead><tbody>';
+
+    for (var j = 0; j < datosCache.length; j++) {
+        var d = datosCache[j];
+        html += '<tr>' +
+            '<td>' + (d.US_FECHAHORA_INICIO || '') + '</td>' +
+            '<td>' + (d.FUN_CODIGO || '')         + '</td>' +
+            '<td>' + (d.FUN_RUT || '')            + '</td>' +
+            '<td>' + (d.NOMBRE_COMPLETO || '')    + '</td>' +
+            '<td>' + (d.GRA_DESCRIPCION || '')    + '</td>' +
+            '<td>' + (d.UNI_DESCRIPCION || '')    + '</td>' +
+            '<td>' + (d.TUS_DESCRIPCION || '')    + '</td>' +
+            '<td>' + (d.US_DIRECCION_IP || '')    + '</td>' +
+            '<td>' + (d.US_EVENTO || '')          + '</td>' +
+        '</tr>';
+    }
+
+    html += '</tbody></table>';
+
+    var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href   = url;
+    a.download = 'ingresos_proservipol_' + fechaHoy() + '.xls';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -233,6 +284,10 @@ function ocultarTabla() {
 function mostrarSinResultados() {
     document.getElementById('sin-resultados').classList.remove('hidden');
     document.getElementById('btn-exportar').classList.add('hidden');
+    var btnExcel = document.getElementById('btn-exportar-excel');
+    if (btnExcel) {
+        btnExcel.classList.add('hidden');
+    }
 }
 
 function ocultarSinResultados() {
@@ -269,7 +324,7 @@ function fechaHoy() {
            String(d.getDate()).padStart(2, '0');
 }
 
-// Permitir búsqueda con tecla Enter en el campo de búsqueda
+// Inicialización de eventos
 document.addEventListener('DOMContentLoaded', function() {
     var inputBusqueda = document.getElementById('busqueda');
     if (inputBusqueda) {
@@ -279,4 +334,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // Forzar apertura del datepicker al enfocar el campo (si el navegador lo soporta)
+    var fechaDesde = document.getElementById('fecha_desde');
+    var fechaHasta = document.getElementById('fecha_hasta');
+
+    function prepararDateInput(input) {
+        if (!input || !input.showPicker) return;
+        input.addEventListener('focus', function() {
+            this.showPicker();
+        });
+    }
+
+    prepararDateInput(fechaDesde);
+    prepararDateInput(fechaHasta);
 });

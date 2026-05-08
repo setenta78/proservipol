@@ -11,7 +11,8 @@
         INACTIVITY_TIME: 15 * 60 * 1000, // 15 minutos en milisegundos
         CHECK_INTERVAL: 60 * 1000,        // Verificar cada 1 minuto
         WARNING_TIME: 2 * 60 * 1000,      // Advertir 2 minutos antes
-        API_CHECK_SESSION: 'api/check_session.php'
+        // Siempre desde la raíz del VirtualHost
+        API_CHECK_SESSION: '/api/check_session.php'
     };
     
     let inactivityTimer = null;
@@ -46,7 +47,7 @@
         
         const remainingTime = Math.floor(CONFIG.WARNING_TIME / 1000 / 60);
         
-        if (confirm(`Su sesión expirará en ${remainingTime} minutos por inactividad.\n\n¿Desea continuar trabajando?`)) {
+        if (confirm('Su sesión expirará en ' + remainingTime + ' minutos por inactividad.\n\n¿Desea continuar trabajando?')) {
             resetInactivityTimer();
         }
     }

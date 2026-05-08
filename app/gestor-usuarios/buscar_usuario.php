@@ -1,15 +1,19 @@
 <?php
 session_start();
-require_once 'middleware_auth.php';
+
+// Raíz del sistema según VirtualHost
+$rootPath = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . '/';
+
+require_once $rootPath . 'middleware_auth.php';
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
-require_once "queries/config.php";
-require_once "queries/general_queries.php";
+require_once $rootPath . "queries/config.php";
+require_once $rootPath . "queries/general_queries.php";
 
 $perfiles = obtenerPerfiles();
 $unidades = obtenerUnidades();
 ?>
-<form method="GET" action="gestor_usuarios.php" class="space-y-4">
+<form method="GET" action="/app/gestor-usuarios/gestor_usuarios.php" class="space-y-4">
     <div class="w-full bg-white rounded-md p-4 mt-1">
         <h2 class="text-sm font-semibold text-green-700 mb-3 text-left">BÚSQUEDA PARAMÉTRICA</h2>
 
@@ -68,7 +72,7 @@ $unidades = obtenerUnidades();
 
         <!-- Botones -->
         <div class="mt-4 flex justify-between">
-            <button onclick="cerrarModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded text-sm">
+            <button type="button" onclick="cerrarModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded text-sm">
                 CANCELAR
             </button>
             <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded text-sm">
